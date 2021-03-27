@@ -44,6 +44,9 @@
 #include "utils/builtins.h"
 #include "utils/rel.h"
 
+#ifdef J3VM
+#include "storage/pleaf.h"
+#endif
 static void reform_and_rewrite_tuple(HeapTuple tuple,
 									 Relation OldHeap, Relation NewHeap,
 									 Datum *values, bool *isnull, RewriteState rwstate);
@@ -118,13 +121,20 @@ heapam_index_fetch_tuple(struct IndexFetchTableData *scan,
 	BufferHeapTupleTableSlot *bslot = (BufferHeapTupleTableSlot *) slot;
 	bool		got_heap_tuple;
 
+#ifdef J3VM
+	bool		oviraptor;
+#endif
+
 	Assert(TTS_IS_BUFFERTUPLE(slot));
 
 	/* We can skip the buffer-switching logic if we're in mid-HOT chain. */
 	if (!*call_again)
 	{
 		/* Switch to correct buffer if we don't have it already */
+#ifdef J3VM
+#else
 		Buffer		prev_buf = hscan->xs_cbuf;
+#endif
 
 		hscan->xs_cbuf = ReleaseAndReadBuffer(hscan->xs_cbuf,
 											  hscan->xs_base.rel,
@@ -133,12 +143,43 @@ heapam_index_fetch_tuple(struct IndexFetchTableData *scan,
 		/*
 		 * Prune page, but only if we weren't already on this page
 		 */
+#ifdef J3VM
+#else
 		if (prev_buf != hscan->xs_cbuf)
 			heap_page_prune_opt(hscan->xs_base.rel, hscan->xs_cbuf);
+#endif
+
 	}
 
 	/* Obtain share-lock on the buffer so we can examine visibility */
 	LockBuffer(hscan->xs_cbuf, BUFFER_LOCK_SHARE);
+#ifdef J3VM
+	oviraptor = IsOviraptor(hscan->xs_base.rel);
+
+
+	if (oviraptor)
+	{
+		got_heap_tuple =
+			heap_hot_search_buffer_with_vc(tid,
+												hscan->xs_base.rel,
+												hscan->xs_cbuf,
+												snapshot,
+												&bslot->base.tupdata,
+												&bslot->base.copied_tuple,
+												all_dead,
+												!*call_again);
+	}
+	else
+	{
+		got_heap_tuple = heap_hot_search_buffer(tid,
+												hscan->xs_base.rel,
+												hscan->xs_cbuf,
+												snapshot,
+												&bslot->base.tupdata,
+												all_dead,
+												!*call_again);
+	}
+#else
 	got_heap_tuple = heap_hot_search_buffer(tid,
 											hscan->xs_base.rel,
 											hscan->xs_cbuf,
@@ -146,6 +187,8 @@ heapam_index_fetch_tuple(struct IndexFetchTableData *scan,
 											&bslot->base.tupdata,
 											all_dead,
 											!*call_again);
+#endif
+
 	bslot->base.tupdata.t_self = *tid;
 	LockBuffer(hscan->xs_cbuf, BUFFER_LOCK_UNLOCK);
 
@@ -158,7 +201,18 @@ heapam_index_fetch_tuple(struct IndexFetchTableData *scan,
 		*call_again = !IsMVCCSnapshot(snapshot);
 
 		slot->tts_tableOid = RelationGetRelid(scan->rel);
+
+#ifdef J3VM
+		if (oviraptor)
+			ExecStoreBufferHeapTuple(
+					bslot->base.copied_tuple, slot, hscan->xs_cbuf);
+		else
+			ExecStoreBufferHeapTuple(
+					&bslot->base.tupdata, slot, hscan->xs_cbuf);
+#else
 		ExecStoreBufferHeapTuple(&bslot->base.tupdata, slot, hscan->xs_cbuf);
+#endif
+
 	}
 	else
 	{
@@ -300,12 +354,29 @@ heapam_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 					Snapshot snapshot, Snapshot crosscheck, bool wait,
 					TM_FailureData *tmfd, bool changingPart)
 {
+#ifdef J3VM
+	bool		oviraptor;
+
+	oviraptor = IsOviraptor(relation);
+
+	if (oviraptor)
+		/* heap deletion for vDriver. */
+		// JAESEON
+		return heap_delete_with_vc(relation, tid, cid, snapshot,
+				crosscheck, wait, tmfd, changingPart);
+	else
+		/* Original routine. */
+		return heap_delete(relation, tid, cid, crosscheck, wait, tmfd, changingPart);
+
+
+#else
 	/*
 	 * Currently Deleting of index tuples are handled at vacuum, in case if
 	 * the storage itself is cleaning the dead tuples by itself, it is the
 	 * time to call the index tuple deletion also.
 	 */
 	return heap_delete(relation, tid, cid, crosscheck, wait, tmfd, changingPart);
+#endif
 }
 
 
@@ -319,12 +390,29 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 	HeapTuple	tuple = ExecFetchSlotHeapTuple(slot, true, &shouldFree);
 	TM_Result	result;
 
+#ifdef J3VM
+	bool oviraptor;
+#endif
+
 	/* Update the tuple with table oid */
 	slot->tts_tableOid = RelationGetRelid(relation);
 	tuple->t_tableOid = slot->tts_tableOid;
+#ifdef J3VM
 
+	oviraptor = IsOviraptor(relation);
+
+	if (oviraptor)
+		result = heap_update_with_vc(relation, otid, tuple, cid, snapshot,
+				crosscheck, wait, tmfd, lockmode);
+	else
+		result = heap_update(relation, otid, tuple, cid, crosscheck, wait,
+				tmfd, lockmode);
+
+#else
 	result = heap_update(relation, otid, tuple, cid, crosscheck, wait,
 						 tmfd, lockmode);
+#endif
+
 	ItemPointerCopy(&tuple->t_self, &slot->tts_tid);
 
 	/*
@@ -335,7 +423,14 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 	 *
 	 * If it's a HOT update, we mustn't insert new index entries.
 	 */
+#ifdef J3VM
+	if (oviraptor)
+		*update_indexes = false;
+	else
+		*update_indexes = result == TM_Ok && !HeapTupleIsHeapOnly(tuple);
+#else
 	*update_indexes = result == TM_Ok && !HeapTupleIsHeapOnly(tuple);
+#endif
 
 	if (shouldFree)
 		pfree(tuple);
@@ -2114,6 +2209,20 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 	Snapshot	snapshot;
 	int			ntup;
 
+#ifdef J3VM
+	Relation  relation;
+	bool        oviraptor;
+
+//	Bitmapset *bms_pk;
+//	Datum   primary_key;
+//	int     attnum_pk;
+//	bool    is_null;
+//	int     cache_id;
+
+	relation = scan->rs_rd;
+	oviraptor = IsOviraptor(relation);
+
+#endif
 	hscan->rs_cindex = 0;
 	hscan->rs_ntuples = 0;
 
@@ -2141,7 +2250,10 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 	/*
 	 * Prune and repair fragmentation for the whole page, if possible.
 	 */
+#ifdef J3VM
+#else
 	heap_page_prune_opt(scan->rs_rd, buffer);
+#endif
 
 	/*
 	 * We must hold share lock on the buffer content while examining tuple
@@ -2169,9 +2281,28 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 			HeapTupleData heapTuple;
 
 			ItemPointerSet(&tid, page, offnum);
+
+#ifdef J3VM
+			if (oviraptor)
+			{
+				if (heap_hot_search_buffer_with_vc(
+							&tid, scan->rs_rd, buffer, snapshot, &heapTuple,
+							&hscan->rs_vistuples_copied[ntup], NULL, true))
+					hscan->rs_vistuples[ntup++] =
+						ItemPointerGetOffsetNumber(&tid);
+			}
+			else
+			{
+				if (heap_hot_search_buffer(&tid, scan->rs_rd, buffer,
+							snapshot, &heapTuple, NULL, true))
+					hscan->rs_vistuples[ntup++] =
+						ItemPointerGetOffsetNumber(&tid);
+			}
+#else
 			if (heap_hot_search_buffer(&tid, scan->rs_rd, buffer, snapshot,
 									   &heapTuple, NULL, true))
 				hscan->rs_vistuples[ntup++] = ItemPointerGetOffsetNumber(&tid);
+#endif
 		}
 	}
 	else
@@ -2190,6 +2321,185 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 			HeapTupleData loctup;
 			bool		valid;
 
+#ifdef J3VM
+			if (oviraptor)
+			{
+				Item meta_tup;
+				uint64 l_off, r_off;
+				TransactionId xid_bound;
+				int ret_id;
+
+				lp = PageGetItemId(dp, offnum);
+				if (!ItemIdIsNormal(lp))
+					continue;
+
+				if (LP_OVR_IS_UNUSED(lp))
+					continue;
+
+				if (LP_IS_PLEAF_FLAG(lp))
+					continue;
+
+				loctup.t_data = (HeapTupleHeader) PageGetItem((Page) dp, lp);
+				loctup.t_len = ItemIdGetLength(lp);
+				loctup.t_tableOid = scan->rs_rd->rd_id;
+				ItemPointerSet(&loctup.t_self, page, offnum);
+				valid = HeapTupleSatisfiesVisibility(&loctup, snapshot, buffer);
+
+				HeapCheckForSerializableConflictOut(valid, scan->rs_rd, &loctup,
+						buffer, snapshot);
+
+				if (valid)
+				{
+					/* Copy visible tuple */
+					if (hscan->rs_vistuples_copied[ntup] != NULL)
+						heap_freetuple(hscan->rs_vistuples_copied[ntup]);
+
+					hscan->rs_vistuples_copied[ntup] = heap_copytuple(&loctup);
+					hscan->rs_vistuples[ntup] = offnum;
+					ntup++;
+
+					PredicateLockTID(scan->rs_rd, &loctup.t_self, snapshot,
+									 HeapTupleHeaderGetXmin(loctup.t_data));
+
+					if (LP_OVR_IS_LEFT(lp))
+					{
+						/* Skip right-side tuple */
+						offnum++;
+					}
+
+					/* Skip meta tuple */
+					offnum++;
+
+					continue;
+				}
+
+				if (LP_OVR_IS_LEFT(lp))
+					/* Left-side tuple is invisible, let's look at right-side. */
+					continue;
+
+				Assert(LP_OVR_IS_RIGHT(lp));
+
+				/*
+				 * Both left and right-side tuple are invisible so that
+				 * we need to search vDriver inside.
+				 */
+				if (curr_cmdtype == CMD_UPDATE || curr_cmdtype == CMD_DELETE)
+				{
+					/*
+					 * If this scanning is for update, we don't need to bother
+					 * searching inside the vDriver.
+					 */
+					if (hscan->rs_vistuples_copied[ntup] != NULL)
+						heap_freetuple(hscan->rs_vistuples_copied[ntup]);
+
+					/*
+					 * We cannot find visible tuple inside the heap page.
+					 * Copy one of any tuple in the heap page so that
+					 * following ExecStoreBufferHeapTuple can be passed.
+					 */
+					hscan->rs_vistuples_copied[ntup] = heap_copytuple(&loctup);
+
+					hscan->rs_vistuples[ntup] = offnum;
+					ntup++;
+
+					continue;
+				}
+				hscan->rs_vistuples_copied[ntup] = NULL;
+
+				meta_tup = PageGetItem((Page) dp, lp + 1);
+				memcpy(&l_off, meta_tup, sizeof(uint64));
+				memcpy(&r_off, meta_tup + sizeof(uint64), sizeof(uint64));
+				memcpy(&xid_bound, meta_tup + sizeof(uint64) * 2, sizeof(TransactionId));
+
+				if (PLeafIsLeftLookup(l_off, r_off, xid_bound, snapshot))
+				{
+					ret_id = PLeafLookupTuple(l_off, snapshot, 
+													loctup.t_len, (void**) &(loctup.t_data));
+				}
+				else
+				{
+					ret_id = PLeafLookupTuple(r_off, snapshot,
+													loctup.t_len, (void**) &(loctup.t_data));
+				}
+			
+				Assert(ret_id != -1);
+
+				if (ret_id != -1)
+				{
+					loctup.t_tableOid = OID_MAX;
+					ItemPointerSetInvalid(&loctup.t_self);
+					
+					if (hscan->rs_vistuples_copied[ntup] != NULL)
+						heap_freetuple(hscan->rs_vistuples_copied[ntup]);
+
+					hscan->rs_vistuples_copied[ntup] =
+						heap_copytuple(&loctup);
+
+					// Unref(ret_id) in EBI-page
+
+					hscan->rs_vistuples[ntup] = offnum;
+					ntup++;
+				}
+				// JAESEON
+				/*
+				 * Need to add FirstLowInvalidHeapAttributeNumber to get the
+				 * exact attribute number of the primary key.
+				 * See the comment above RelationGetIndexAttrBitmap function.
+				 */
+				/*bms_pk = RelationGetIndexAttrBitmap(
+						relation, INDEX_ATTR_BITMAP_PRIMARY_KEY);
+
+				attnum_pk = bms_singleton_member(bms_pk) +
+					FirstLowInvalidHeapAttributeNumber;
+				*/
+				/* Retrive the primary key from the old tuple */
+				//primary_key = heap_getattr(
+				//		&loctup, attnum_pk, relation->rd_att, &is_null);
+
+				/* Find the old version from the vcluster */
+				/*cache_id = VClusterLookupTuple(relation->rd_node.relNode,
+						primary_key,
+						snapshot,
+						(void**) &(loctup.t_data));
+
+				if (VCacheIsValid(cache_id))
+				{
+					loctup.t_tableOid = OID_MAX;
+					ItemPointerSetInvalid(&(loctup.t_self));
+
+					if (hscan->rs_vistuples_copied[ntup] != NULL)
+						heap_freetuple(hscan->rs_vistuples_copied[ntup]);
+
+					hscan->rs_vistuples_copied[ntup] =
+						heap_copytuple(&loctup);
+
+					VCacheUnref(cache_id);
+
+					hscan->rs_vistuples[ntup] = offnum;
+					ntup++;
+				}*/
+			}
+			else
+			{
+				lp = PageGetItemId(dp, offnum);
+				if (!ItemIdIsNormal(lp))
+					continue;
+				loctup.t_data = (HeapTupleHeader) PageGetItem((Page) dp, lp);
+				loctup.t_len = ItemIdGetLength(lp);
+				loctup.t_tableOid = scan->rs_rd->rd_id;
+				ItemPointerSet(&loctup.t_self, page, offnum);
+				valid = HeapTupleSatisfiesVisibility(&loctup, snapshot, buffer);
+				if (valid)
+				{
+					hscan->rs_vistuples[ntup++] = offnum;
+					PredicateLockTID(scan->rs_rd, &loctup.t_self, snapshot,
+									 HeapTupleHeaderGetXmin(loctup.t_data));
+
+				}
+				HeapCheckForSerializableConflictOut(valid, scan->rs_rd, &loctup,
+						buffer, snapshot);
+			}
+#else
 			lp = PageGetItemId(dp, offnum);
 			if (!ItemIdIsNormal(lp))
 				continue;
@@ -2206,6 +2516,7 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 			}
 			HeapCheckForSerializableConflictOut(valid, scan->rs_rd, &loctup,
 												buffer, snapshot);
+#endif
 		}
 	}
 
@@ -2227,6 +2538,10 @@ heapam_scan_bitmap_next_tuple(TableScanDesc scan,
 	Page		dp;
 	ItemId		lp;
 
+#ifdef J3VM
+	Relation relation;
+	bool		oviraptor;
+#endif
 	/*
 	 * Out of range?  If so, nothing more to look at on this page
 	 */
@@ -2245,6 +2560,23 @@ heapam_scan_bitmap_next_tuple(TableScanDesc scan,
 
 	pgstat_count_heap_fetch(scan->rs_rd);
 
+#ifdef J3VM
+	relation = scan->rs_rd;
+	oviraptor = IsOviraptor(relation);
+
+	if (oviraptor)
+		ExecStoreBufferHeapTuple(hscan->rs_vistuples_copied[hscan->rs_cindex],
+				slot,
+				hscan->rs_cbuf);
+	else
+		/*
+		 * Set up the result slot to point to this tuple.  Note that the slot
+		 * acquires a pin on the buffer.
+		 */
+		ExecStoreBufferHeapTuple(&hscan->rs_ctup,
+				slot,
+				hscan->rs_cbuf);
+#else
 	/*
 	 * Set up the result slot to point to this tuple.  Note that the slot
 	 * acquires a pin on the buffer.
@@ -2252,6 +2584,7 @@ heapam_scan_bitmap_next_tuple(TableScanDesc scan,
 	ExecStoreBufferHeapTuple(&hscan->rs_ctup,
 							 slot,
 							 hscan->rs_cbuf);
+#endif
 
 	hscan->rs_cindex++;
 

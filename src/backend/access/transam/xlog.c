@@ -6327,6 +6327,9 @@ StartupXLOG(void)
 		   CurrentResourceOwner == AuxProcessResourceOwner);
 	CurrentResourceOwner = AuxProcessResourceOwner;
 
+#ifdef J3VM // JAESEON REDO!!
+	//sleep(20);
+#endif
 	/*
 	 * Check that contents look valid.
 	 */

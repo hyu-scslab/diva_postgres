@@ -33,6 +33,9 @@
 #define FrozenTransactionId			((TransactionId) 2)
 #define FirstNormalTransactionId	((TransactionId) 3)
 #define MaxTransactionId			((TransactionId) 0xFFFFFFFF)
+#ifdef J3VM
+#define MyMaxTransactionId		((TransactionId) 0xFFFFFFF)
+#endif
 
 /* ----------------
  *		transaction ID manipulation macros

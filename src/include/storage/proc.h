@@ -22,6 +22,10 @@
 #include "storage/pg_sema.h"
 #include "storage/proclist_types.h"
 
+#ifdef J3VM
+#include "utils/dsa.h"
+#endif
+
 /*
  * Each backend advertises up to PGPROC_MAX_CACHED_SUBXIDS TransactionIds
  * for non-aborted subtransactions of its current top transaction.  These
@@ -261,6 +265,12 @@ typedef struct PROC_HDR
 	pg_atomic_uint32 clogGroupFirst;
 	/* WALWriter process's latch */
 	Latch	   *walwriterLatch;
+#ifdef J3VM
+	/* EBI tree process's latch */
+	Latch		 *ebitreeLatch;
+	/* PLeaf Manager process's latch */
+	Latch		 *pleafmanagerLatch;
+#endif
 	/* Checkpointer process's latch */
 	Latch	   *checkpointerLatch;
 	/* Current shared estimate of appropriate spins_per_delay value */
@@ -287,7 +297,11 @@ extern PGPROC *PreparedXactProcs;
  * Startup process and WAL receiver also consume 2 slots, but WAL writer is
  * launched only after startup has exited, so we only need 4 slots.
  */
+#ifdef J3VM
+#define NUM_AUXILIARY_PROCS		6
+#else
 #define NUM_AUXILIARY_PROCS		4
+#endif
 
 /* configurable options */
 extern PGDLLIMPORT int DeadlockTimeout;

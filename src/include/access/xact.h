@@ -22,6 +22,9 @@
 #include "storage/sinval.h"
 #include "utils/datetime.h"
 
+#ifdef J3VM
+#include "utils/snapshot.h"
+#endif
 /*
  * Maximum size of Global Transaction ID (including '\0').
  *
@@ -428,6 +431,11 @@ extern void RegisterXactCallback(XactCallback callback, void *arg);
 extern void UnregisterXactCallback(XactCallback callback, void *arg);
 extern void RegisterSubXactCallback(SubXactCallback callback, void *arg);
 extern void UnregisterSubXactCallback(SubXactCallback callback, void *arg);
+
+#ifdef J3VM
+extern void BindTransaction(Snapshot snapshot);
+extern void UnbindTransaction(void);
+#endif
 
 extern int	xactGetCommittedChildren(TransactionId **ptr);
 

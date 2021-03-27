@@ -148,6 +148,10 @@ static const char *const BuiltinTrancheNames[] = {
 	"BufferContent",
 	/* LWTRANCHE_BUFFER_IO: */
 	"BufferIO",
+#ifdef J3VM
+	/* LWTRANCHE_PLEAF_BUFFER_IO: */
+	"PLeafBufferIO",
+#endif
 	/* LWTRANCHE_REPLICATION_ORIGIN_STATE: */
 	"ReplicationOriginState",
 	/* LWTRANCHE_REPLICATION_SLOT_IO: */
@@ -156,6 +160,10 @@ static const char *const BuiltinTrancheNames[] = {
 	"LockFastPath",
 	/* LWTRANCHE_BUFFER_MAPPING: */
 	"BufferMapping",
+#ifdef J3VM
+	/* LWTRANCHE_PLEAF_MAPPING: */
+	"PLeafMapping",
+#endif
 	/* LWTRANCHE_LOCK_MANAGER: */
 	"LockManager",
 	/* LWTRANCHE_PREDICATE_LOCK_MANAGER: */
@@ -529,6 +537,24 @@ InitializeLWLocks(void)
 	for (id = 0; id < NUM_BUFFER_PARTITIONS; id++, lock++)
 		LWLockInitialize(&lock->lock, LWTRANCHE_BUFFER_MAPPING);
 
+#ifdef J3VM
+	/* Initialize pleaf-buffer mapping LWLocks in main array */
+	lock = MainLWLockArray + NUM_INDIVIDUAL_LWLOCKS + NUM_BUFFER_PARTITIONS;
+	for (id = 0; id < NUM_PLEAF_PARTITIONS; id++, lock++)
+		LWLockInitialize(&lock->lock, LWTRANCHE_PLEAF_MAPPING);
+	
+	/* Initialize lmgrs' LWLocks in main array */
+	lock = MainLWLockArray + NUM_INDIVIDUAL_LWLOCKS + 
+		NUM_BUFFER_PARTITIONS + NUM_PLEAF_PARTITIONS;
+	for (id = 0; id < NUM_LOCK_PARTITIONS; id++, lock++)
+		LWLockInitialize(&lock->lock, LWTRANCHE_LOCK_MANAGER);
+
+	/* Initialize predicate lmgrs' LWLocks in main array */
+	lock = MainLWLockArray + NUM_INDIVIDUAL_LWLOCKS +
+		NUM_BUFFER_PARTITIONS + NUM_PLEAF_PARTITIONS + NUM_LOCK_PARTITIONS;
+	for (id = 0; id < NUM_PREDICATELOCK_PARTITIONS; id++, lock++)
+		LWLockInitialize(&lock->lock, LWTRANCHE_PREDICATE_LOCK_MANAGER);
+#else
 	/* Initialize lmgrs' LWLocks in main array */
 	lock = MainLWLockArray + NUM_INDIVIDUAL_LWLOCKS + NUM_BUFFER_PARTITIONS;
 	for (id = 0; id < NUM_LOCK_PARTITIONS; id++, lock++)
@@ -539,7 +565,7 @@ InitializeLWLocks(void)
 		NUM_BUFFER_PARTITIONS + NUM_LOCK_PARTITIONS;
 	for (id = 0; id < NUM_PREDICATELOCK_PARTITIONS; id++, lock++)
 		LWLockInitialize(&lock->lock, LWTRANCHE_PREDICATE_LOCK_MANAGER);
-
+#endif
 	/*
 	 * Copy the info about any named tranches into shared memory (so that
 	 * other processes can see it), and initialize the requested LWLocks.

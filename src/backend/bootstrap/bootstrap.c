@@ -50,6 +50,10 @@
 #include "utils/rel.h"
 #include "utils/relmapper.h"
 
+#ifdef J3VM
+#include "storage/pleaf_mgr.h"
+#include "postmaster/ebi_tree_process.h"
+#endif
 uint32		bootstrap_data_checksum_version = 0;	/* No checksum */
 
 
@@ -328,6 +332,15 @@ AuxiliaryProcessMain(int argc, char *argv[])
 		case WalWriterProcess:
 			MyBackendType = B_WAL_WRITER;
 			break;
+#ifdef J3VM
+		case EbiTreeProcess:
+			MyBackendType = B_EBI_TREE;
+			break;
+
+		case PLeafManagerProcess:
+			MyBackendType = B_PLEAF_MANAGER;
+			break;
+#endif
 		case WalReceiverProcess:
 			MyBackendType = B_WAL_RECEIVER;
 			break;
@@ -458,6 +471,18 @@ AuxiliaryProcessMain(int argc, char *argv[])
 			InitXLOGAccess();
 			WalWriterMain();
 			proc_exit(1);		/* should never return */
+
+#ifdef J3VM
+		case EbiTreeProcess:
+			/* don't set signals, ebitree has its own agenda */
+			EbiTreeProcessMain();
+			proc_exit(1);	/* should never return */
+
+		case PLeafManagerProcess:
+			/* don't set signals, pleaf manager has its own agenda */
+			PLeafManagerMain();
+			proc_exit(1);		/* should never return */
+#endif
 
 		case WalReceiverProcess:
 			/* don't set signals, walreceiver has its own agenda */

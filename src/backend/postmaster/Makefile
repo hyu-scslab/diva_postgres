@@ -24,6 +24,7 @@ OBJS = \
 	postmaster.o \
 	startup.o \
 	syslogger.o \
-	walwriter.o
+	walwriter.o \
+	ebi_tree_process.o
 
 include $(top_srcdir)/src/backend/common.mk

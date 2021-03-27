@@ -26,6 +26,10 @@
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
 
+#ifdef J3VM
+#include "storage/pleaf.h"
+#endif
+
 /* Working data for heap_page_prune and subroutines */
 typedef struct
 {
@@ -43,6 +47,13 @@ typedef struct
 } PruneState;
 
 /* Local functions */
+#ifdef J3VM 
+static int  heap_prune_oviraptor(Relation relation, Buffer buffer,
+							OffsetNumber offnum,
+							TransactionId OldestXmin,
+							PruneState *prstate);
+#endif
+
 static int	heap_prune_chain(Relation relation, Buffer buffer,
 							 OffsetNumber rootoffnum,
 							 TransactionId OldestXmin,
@@ -219,10 +230,25 @@ heap_page_prune(Relation relation, Buffer buffer, TransactionId OldestXmin,
 		if (!ItemIdIsUsed(itemid) || ItemIdIsDead(itemid))
 			continue;
 
+#ifdef J3VM 
+		if (IsOviraptor(relation))
+		{
+			ndeleted += heap_prune_oviraptor(relation, buffer, offnum,
+					OldestXmin,
+					&prstate);
+		}
+		else
+		{
+			ndeleted += heap_prune_chain(relation, buffer, offnum,
+					OldestXmin,
+					&prstate);
+		}
+#else
 		/* Process this item or chain of items */
 		ndeleted += heap_prune_chain(relation, buffer, offnum,
 									 OldestXmin,
 									 &prstate);
+#endif
 	}
 
 	/* Any error while applying the changes is critical */
@@ -322,6 +348,182 @@ heap_page_prune(Relation relation, Buffer buffer, TransactionId OldestXmin,
 	return ndeleted;
 }
 
+#ifdef J3VM 
+/*
+ * Prune specified line pointer.
+ *
+ * If the item is an index-referenced tuple (i.e. leftside of oviraptor),
+ * leftside & rightside tuples of oviraptor is pruned by marking flags of
+ * linepointers as LP_DEAD.
+ *
+ * OldestXmin is the cutoff XID used to identify dead or recent dead tuples.
+ * It is needed for HeapTupleSatisfiesVacuum().
+ *
+ * Returns the number of tuples (to be) deleted from the page.
+ * TODO: Returned number is meeningless yet.
+ */
+static int
+heap_prune_oviraptor(Relation relation, Buffer buffer, OffsetNumber offnum,
+		TransactionId OldestXmin,
+		PruneState *prstate)
+{
+	int         ndeleted = 0;
+	Page        dp = (Page) BufferGetPage(buffer);
+
+	ItemId        lp;
+	HeapTupleHeader htup;
+	HeapTupleData   tup;
+
+	OffsetNumber    offnum_right = offnum + 1;
+	ItemId        lp_right;
+	HeapTupleHeader htup_right;
+	HeapTupleData   tup_right;
+
+//	int64_t      primary_key;
+//	PrimaryKey      primary_key;
+//	Bitmapset*      bms_pk;
+//	int       attnum_pk;
+//	bool      is_null;
+
+	tup.t_tableOid = RelationGetRelid(relation);
+	tup_right.t_tableOid = RelationGetRelid(relation);
+
+	lp = PageGetItemId(dp, offnum);
+	lp_right = PageGetItemId(dp, offnum_right);
+
+	if (!ItemIdIsNormal(lp))
+	{
+		return ndeleted;
+	}
+
+	/* We only do if this tuple is leftside of oviraptor. */
+	if (LP_OVR_IS_RIGHT(lp) || LP_IS_PLEAF_FLAG(lp)) // is left oviraptor?
+	{
+		return ndeleted;
+	}
+
+	Assert(LP_OVR_IS_LEFT(lp));
+
+	if (LP_OVR_IS_USING(lp))
+	{
+		htup = (HeapTupleHeader) PageGetItem(dp, lp);
+
+		tup.t_data = htup;
+		tup.t_len = ItemIdGetLength(lp);
+		ItemPointerSet(&(tup.t_self), BufferGetBlockNumber(buffer), offnum);
+
+		switch (HeapTupleSatisfiesVacuum(&tup, OldestXmin, buffer))
+		{
+			case HEAPTUPLE_DEAD:
+			case HEAPTUPLE_RECENTLY_DEAD:
+				/*
+				 * These cases means that the transaction who has deleted
+				 * this tuple has committed, but we don't know whether this is
+				 * visible or not yet.
+				 */
+				break;
+
+			case HEAPTUPLE_DELETE_IN_PROGRESS:
+			case HEAPTUPLE_LIVE:
+			case HEAPTUPLE_INSERT_IN_PROGRESS:
+				/* This tuple is not deleted. */
+				return ndeleted;
+				break;
+
+			default:
+				elog(ERROR, "@@ unexpected HeapTupleSatisfiesVacuum result");
+				return ndeleted;
+				break;
+		}
+
+		/* Visibility check. */
+		if (true)
+		//if (!RecIsInDeadZone(HeapTupleHeaderGetRawXmin(htup),
+		//			HeapTupleHeaderGetRawXmax(htup)))
+		{
+			/* It is visible by other transactions. */
+			return ndeleted;
+		}
+	}
+
+	/* Left one is done. Let's do this for right one. */
+
+	if (!ItemIdIsNormal(lp_right))
+	{
+		return ndeleted;
+	}
+
+	/* Is it right one? */
+	if (!LP_OVR_IS_RIGHT(lp_right))
+	{
+		return ndeleted;
+	}
+
+	if (LP_OVR_IS_USING(lp_right))
+	{
+		htup_right = (HeapTupleHeader) PageGetItem(dp, lp_right);
+
+		tup_right.t_data = htup_right;
+		tup_right.t_len = ItemIdGetLength(lp_right);
+		ItemPointerSet(&(tup_right.t_self), BufferGetBlockNumber(buffer), offnum_right);
+
+		switch (HeapTupleSatisfiesVacuum(&tup_right, OldestXmin, buffer))
+		{
+			case HEAPTUPLE_DEAD:
+			case HEAPTUPLE_RECENTLY_DEAD:
+				/*
+				 * These cases means that the transaction who has deleted
+				 * this tuple has committed, but we don't know whether this is
+				 * visible or not yet.
+				 */
+				break;
+
+			case HEAPTUPLE_DELETE_IN_PROGRESS:
+			case HEAPTUPLE_LIVE:
+			case HEAPTUPLE_INSERT_IN_PROGRESS:
+				/* This tuple is not deleted. */
+				return ndeleted;
+
+			default:
+				elog(ERROR, "@@ unexpected HeapTupleSatisfiesVacuum result");
+				return ndeleted;
+		}
+
+		/* Visibility check. */
+		if (true)
+		//if (!RecIsInDeadZone(HeapTupleHeaderGetRawXmin(htup_right),
+		//			HeapTupleHeaderGetRawXmax(htup_right)))
+		{
+			/* It is visible by other transactions. */
+			return ndeleted;
+		}
+	}
+
+	/* Right one is done. Let's do this for the version chain. */
+
+	/* Check all visibility of all versions */
+	/*if (!VersionChainIsInDeadZone(relation->rd_node.relNode, primary_key))
+	{
+		return ndeleted;
+	}*/
+
+	/*
+	 * OK. This tuple is deleted and invisible to all live transactions.
+	 * Store it in dead record list.
+	 */
+	heap_prune_record_dead(prstate, offnum);
+	heap_prune_record_dead(prstate, offnum_right);
+	heap_prune_record_dead(prstate, offnum_right + 1);
+
+	/*
+	 * Actually, the number of deleted tuple(ndeleted) is not working.
+	 * We remain it as TODO right now.
+	 */
+	ndeleted++;
+
+	return ndeleted;
+}
+#endif
 
 /*
  * Prune specified line pointer or a HOT chain originating at line pointer.

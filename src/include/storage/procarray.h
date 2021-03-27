@@ -78,7 +78,11 @@ extern void ExpireOldKnownAssignedTransactionIds(TransactionId xid);
 extern int	GetMaxSnapshotXidCount(void);
 extern int	GetMaxSnapshotSubxidCount(void);
 
+#ifdef J3VM
+extern Snapshot GetSnapshotData(Snapshot snapshot, bool is_txn);
+#else
 extern Snapshot GetSnapshotData(Snapshot snapshot);
+#endif
 
 extern bool ProcArrayInstallImportedXmin(TransactionId xmin,
 										 VirtualTransactionId *sourcevxid);
@@ -92,6 +96,10 @@ extern TransactionId GetOldestXmin(Relation rel, int flags);
 extern TransactionId GetOldestActiveTransactionId(void);
 extern TransactionId GetOldestSafeDecodingTransactionId(bool catalogOnly);
 
+#ifdef J3VM
+extern TransactionId PLeafGetOldestActiveTransactionId(void);
+extern TransactionId PLeafGetMaxTransactionId(void);
+#endif
 extern VirtualTransactionId *GetVirtualXIDsDelayingChkpt(int *nvxids);
 extern bool HaveVirtualXIDsDelayingChkpt(VirtualTransactionId *vxids, int nvxids);
 

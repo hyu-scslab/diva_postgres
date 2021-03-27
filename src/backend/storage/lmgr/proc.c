@@ -56,6 +56,10 @@
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
 
+#ifdef J3VM
+#include "postmaster/ebi_tree_process.h"
+#endif
+
 /* GUC variables */
 int			DeadlockTimeout = 1000;
 int			StatementTimeout = 0;
@@ -186,6 +190,10 @@ InitProcGlobal(void)
 	ProcGlobal->startupProcPid = 0;
 	ProcGlobal->startupBufferPinWaitBufId = -1;
 	ProcGlobal->walwriterLatch = NULL;
+#ifdef J3VM
+	ProcGlobal->ebitreeLatch = NULL;
+	ProcGlobal->pleafmanagerLatch = NULL;
+#endif
 	ProcGlobal->checkpointerLatch = NULL;
 	pg_atomic_init_u32(&ProcGlobal->procArrayGroupFirst, INVALID_PGPROCNO);
 	pg_atomic_init_u32(&ProcGlobal->clogGroupFirst, INVALID_PGPROCNO);
@@ -467,6 +475,11 @@ InitProcess(void)
 	 */
 	InitLWLockAccess();
 	InitDeadLockChecking();
+
+#ifdef J3VM
+	if (IsUnderPostmaster)
+		EbiTreeDsaInit();
+#endif
 }
 
 /*

@@ -46,6 +46,9 @@
 #include <signal.h>
 
 #include "access/clog.h"
+#ifdef J3VM
+#include "access/parallel.h"
+#endif
 #include "access/subtrans.h"
 #include "access/transam.h"
 #include "access/twophase.h"
@@ -63,6 +66,10 @@
 #include "utils/builtins.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
+
+#ifdef J3VM
+#include "postmaster/ebi_tree_process.h"
+#endif
 
 #define UINT32_ACCESS_ONCE(var)		 ((uint32)(*((volatile uint32 *)&(var))))
 
@@ -1500,8 +1507,13 @@ GetMaxSnapshotSubxidCount(void)
  * Note: this function should probably not be called with an argument that's
  * not statically allocated (see xip allocation below).
  */
+#ifdef J3VM
+Snapshot
+GetSnapshotData(Snapshot snapshot, bool is_txn)
+#else
 Snapshot
 GetSnapshotData(Snapshot snapshot)
+#endif
 {
 	ProcArrayStruct *arrayP = procArray;
 	TransactionId xmin;
@@ -1696,7 +1708,6 @@ GetSnapshotData(Snapshot snapshot)
 			suboverflowed = true;
 	}
 
-
 	/*
 	 * Fetch into local variable while ProcArrayLock is held - the
 	 * LWLockRelease below is a barrier, ensuring this happens inside the
@@ -1708,8 +1719,18 @@ GetSnapshotData(Snapshot snapshot)
 	if (!TransactionIdIsValid(MyPgXact->xmin))
 		MyPgXact->xmin = TransactionXmin = xmin;
 
+#ifdef J3VM
+	/* Bind transaction */
+	if (!FirstSnapshotSet && is_txn)
+		BindTransaction(snapshot);
+#endif
+
 	LWLockRelease(ProcArrayLock);
 
+#ifdef J3VM
+	if ((!(IsInParallelMode() || IsParallelWorker())) && is_txn)
+		(void) GetCurrentTransactionId();
+#endif
 	/*
 	 * Update globalxmin to include actual process xids.  This is a slightly
 	 * different way of computing it than GetOldestXmin uses, but should give
@@ -2250,6 +2271,50 @@ GetOldestSafeDecodingTransactionId(bool catalogOnly)
 	return oldestSafeXid;
 }
 
+#ifdef J3VM
+TransactionId
+PLeafGetOldestActiveTransactionId(void)
+{
+	ProcArrayStruct *arrayP = procArray;
+	TransactionId oldestRunningXid = MyMaxTransactionId;
+	int			index;
+
+	Assert(!RecoveryInProgress());
+	/*
+	 * Spin over procArray collecting all xids and subxids.
+	 */
+	LWLockAcquire(ProcArrayLock, LW_SHARED);
+	for (index = 0; index < arrayP->numProcs; index++)
+	{
+		int			pgprocno = arrayP->pgprocnos[index];
+		PGXACT	   *pgxact = &allPgXact[pgprocno];
+		TransactionId xid;
+
+		/* Fetch xid just once - see GetNewTransactionId */
+		xid = UINT32_ACCESS_ONCE(pgxact->xid);
+		if (!TransactionIdIsNormal(xid))
+			continue;
+
+		if (TransactionIdPrecedes(xid, oldestRunningXid))
+				oldestRunningXid = xid;
+		/*
+		 * Top-level XID of a transaction is always less than any of its
+		 * subxids, so we don't need to check if any of the subxids are
+		 * smaller than oldestRunningXid
+		 */
+	}
+	LWLockRelease(ProcArrayLock);
+
+	return oldestRunningXid;
+}
+
+TransactionId
+PLeafGetMaxTransactionId(void)
+{
+	return XidFromFullTransactionId(ShmemVariableCache->nextFullXid);
+}
+
+#endif
 /*
  * GetVirtualXIDsDelayingChkpt -- Get the VXIDs of transactions that are
  * delaying checkpoint because they have critical actions in progress.

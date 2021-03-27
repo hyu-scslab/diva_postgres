@@ -68,6 +68,9 @@
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
 
+#ifdef J3VM
+#include "storage/ebi_tree.h"
+#endif
 /*
  *	User-tweakable parameters
  */
@@ -192,6 +195,9 @@ typedef struct TransactionStateData
 	int			parallelModeLevel;	/* Enter/ExitParallelMode counter */
 	bool		chain;			/* start a new block after this one */
 	struct TransactionStateData *parent;	/* back link to parent */
+#ifdef J3VM
+	dsa_pointer ebiNode; /* back link to bounded EBI tree */
+#endif
 } TransactionStateData;
 
 typedef TransactionStateData *TransactionState;
@@ -2255,6 +2261,9 @@ CommitTransaction(void)
 	AtEOXact_PgStat(true, is_parallel_worker);
 	AtEOXact_Snapshot(true, false);
 	AtEOXact_ApplyLauncher(true);
+#ifdef J3VM
+	UnbindTransaction();
+#endif
 	pgstat_report_xact_timestamp(0);
 
 	CurrentResourceOwner = NULL;
@@ -2272,6 +2281,9 @@ CommitTransaction(void)
 	s->childXids = NULL;
 	s->nChildXids = 0;
 	s->maxChildXids = 0;
+#ifdef J3VM
+	s->ebiNode = InvalidDsaPointer;
+#endif
 
 	XactTopFullTransactionId = InvalidFullTransactionId;
 	nParallelCurrentXids = 0;
@@ -6021,3 +6033,24 @@ xact_redo(XLogReaderState *record)
 	else
 		elog(PANIC, "xact_redo: unknown op code %u", info);
 }
+
+#ifdef J3VM
+void
+BindTransaction(Snapshot snapshot)
+{
+	TransactionState s = CurrentTransactionState;
+	dsa_pointer node = EbiIncreaseRefCount(snapshot); 
+	s->ebiNode = node;                                                             
+}
+
+void
+UnbindTransaction(void)
+{
+
+	TransactionState s = CurrentTransactionState;
+	
+	if (s->ebiNode != InvalidDsaPointer) {
+		EbiDecreaseRefCount(s->ebiNode);
+	}
+}
+#endif

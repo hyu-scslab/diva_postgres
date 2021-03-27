@@ -65,6 +65,10 @@ typedef enum IndexAttrBitmapKind
 extern Bitmapset *RelationGetIndexAttrBitmap(Relation relation,
 											 IndexAttrBitmapKind attrKind);
 
+#ifdef J3VM
+extern bool IsOviraptor(Relation relation);
+#endif
+
 extern void RelationGetExclusionInfo(Relation indexRelation,
 									 Oid **operators,
 									 Oid **procs,

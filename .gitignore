@@ -42,3 +42,8 @@ lib*.pc
 /Debug/
 /Release/
 /tmp_install/
+
+# cscope and tags files
+cscope.*
+tags
+*.swp

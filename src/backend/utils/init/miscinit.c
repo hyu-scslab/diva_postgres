@@ -238,6 +238,15 @@ GetBackendTypeDesc(BackendType backendType)
 		case B_WAL_WRITER:
 			backendDesc = "walwriter";
 			break;
+#ifdef J3VM
+		case B_EBI_TREE:
+			backendDesc = "EBI tree worker";
+			break;
+
+		case B_PLEAF_MANAGER:
+			backendDesc = "pleaf manager";
+			break;
+#endif
 		case B_ARCHIVER:
 			backendDesc = "archiver";
 			break;

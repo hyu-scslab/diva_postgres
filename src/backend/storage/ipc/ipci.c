@@ -44,7 +44,14 @@
 #include "storage/procsignal.h"
 #include "storage/sinvaladt.h"
 #include "storage/spin.h"
+
+#ifdef J3VM
+#include "storage/pleaf.h"
+#include "postmaster/ebi_tree_process.h"
+#endif
+
 #include "utils/snapmgr.h"
+
 
 /* GUCs */
 int			shared_memory_type = DEFAULT_SHARED_MEMORY_TYPE;
@@ -147,6 +154,10 @@ CreateSharedMemoryAndSemaphores(void)
 		size = add_size(size, BTreeShmemSize());
 		size = add_size(size, SyncScanShmemSize());
 		size = add_size(size, AsyncShmemSize());
+#ifdef J3VM /* add_size our system in here */
+		size = add_size(size, EbiTreeShmemSize());
+		size = add_size(size, J3VMShmemSize());
+#endif
 #ifdef EXEC_BACKEND
 		size = add_size(size, ShmemBackendArraySize());
 #endif
@@ -263,6 +274,11 @@ CreateSharedMemoryAndSemaphores(void)
 	BTreeShmemInit();
 	SyncScanShmemInit();
 	AsyncShmemInit();
+
+#ifdef J3VM /* Initialize our system in here */
+	EbiTreeShmemInit();
+	J3VMShmemInit();
+#endif
 
 #ifdef EXEC_BACKEND
 

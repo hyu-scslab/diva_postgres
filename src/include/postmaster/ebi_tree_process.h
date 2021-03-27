@@ -1,0 +1,39 @@
+/*-------------------------------------------------------------------------
+ *
+ * ebi_tree_process.h
+ *	  EBI Tree Process
+ *
+ *
+ *
+ * src/include/postmaster/ebi_tree_process.h
+ *
+ *-------------------------------------------------------------------------
+ */
+
+#ifndef EBI_TREE_PROCESS_H
+#define EBI_TREE_PROCESS_H
+
+#include "c.h"
+#include "storage/ebi_tree.h"
+
+extern void EbiTreeProcessMain(void) pg_attribute_noreturn();
+
+extern Size EbiTreeShmemSize(void);
+extern void EbiTreeShmemInit(void);
+
+extern void EbiTreeDsaInit(void);
+
+typedef struct {
+  pid_t ebitree_pid; /* PID (0 if not started) */
+  dsa_handle handle;
+  dsa_pointer ebitree;      /* EbiTree */
+  dsa_pointer unlink_queue; /* MpscQueue */
+  dsa_pointer delete_queue; /* MpscQueue */
+} EbiTreeShmemStruct;
+
+extern EbiTreeShmemStruct* EbiTreeShmem;
+
+/* src/backend/storage/ebi_tree/ebi_tree.c */
+extern dsa_area* ebitree_dsa_area;
+
+#endif /* EBI_TREE_PROCESS_H */

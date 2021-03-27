@@ -1251,6 +1251,10 @@ RelationBuildDesc(Oid targetRelId, bool insertIt)
 	MemoryContextDelete(tmpcxt);
 #endif
 
+#ifdef J3VM
+	relation->is_systable = false;
+#endif
+
 	return relation;
 }
 
@@ -6403,3 +6407,39 @@ unlink_initfile(const char *initfilename, int elevel)
 							initfilename)));
 	}
 }
+
+
+#ifdef J3VM
+/*
+ * Whether tuples in this relation is oviraptor or not is found out
+ * from the number of index about the relation. If the number is one,
+ * it means this relation is oviraptor.
+ * Don't apply oviraptor to system tables.
+ */
+bool IsOviraptor(Relation relation)
+{
+	Bitmapset* bms_pk;
+
+	if (relation == NULL)
+		return false;
+	if (relation->is_systable)
+		return false;
+
+	if (relation->rd_indexattr == NULL)
+	{
+		RelationGetIndexAttrBitmap(
+				relation, INDEX_ATTR_BITMAP_PRIMARY_KEY);
+	}
+
+	if (relation->rd_indexattr != NULL)
+	{
+		bms_pk = RelationGetIndexAttrBitmap(
+				relation, INDEX_ATTR_BITMAP_PRIMARY_KEY);
+
+		if (bms_num_members(bms_pk) == 1)
+			return true;
+	}
+
+	return false;
+}
+#endif

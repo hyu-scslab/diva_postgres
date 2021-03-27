@@ -102,6 +102,10 @@ table_beginscan_catalog(Relation relation, int nkeys, struct ScanKeyData *key)
 	Oid			relid = RelationGetRelid(relation);
 	Snapshot	snapshot = RegisterSnapshot(GetCatalogSnapshot(relid));
 
+#ifdef J3VM
+	relation->is_systable = true;
+#endif
+
 	return relation->rd_tableam->scan_begin(relation, snapshot, nkeys, key,
 											NULL, flags);
 }

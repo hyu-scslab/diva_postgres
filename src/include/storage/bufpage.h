@@ -419,6 +419,19 @@ do { \
 #define PIV_LOG_WARNING			(1 << 0)
 #define PIV_REPORT_STAT			(1 << 1)
 
+#ifdef J3VM 
+#define PITEM_SZ (20)
+
+#define PageAddItemWithDummy(page, item, size, offsetNumber, \
+								overwrite, is_heap) \
+		PageAddItemExtendedWithDummy(page, item, size, offsetNumber, \
+								((overwrite) ? PAI_OVERWRITE : 0) | \
+								((is_heap) ? PAI_IS_HEAP : 0))
+
+#define PageAddItemInPlace(page, item, size, offsetNumber) \
+	PageAddItemExtendedInPlace(page, item, size, offsetNumber)
+#endif
+
 #define PageAddItem(page, item, size, offsetNumber, overwrite, is_heap) \
 	PageAddItemExtended(page, item, size, offsetNumber, \
 						((overwrite) ? PAI_OVERWRITE : 0) | \
@@ -437,6 +450,18 @@ StaticAssertDecl(BLCKSZ == ((BLCKSZ / sizeof(size_t)) * sizeof(size_t)),
 extern void PageInit(Page page, Size pageSize, Size specialSize);
 extern bool PageIsVerified(Page page, BlockNumber blkno);
 extern bool PageIsVerifiedExtended(Page page, BlockNumber blkno, int flags);
+
+#ifdef J3VM 
+extern OffsetNumber PageAddItemExtendedWithDummy(Page page, Item item,
+												Size size,
+												OffsetNumber offsetNumber,
+												int flags);
+
+extern OffsetNumber PageAddItemExtendedInPlace(Page page, Item item, Size size,
+												OffsetNumber offsetNumber);
+
+#endif
+
 extern OffsetNumber PageAddItemExtended(Page page, Item item, Size size,
 										OffsetNumber offsetNumber, int flags);
 extern Page PageGetTempPage(Page page);
@@ -447,6 +472,9 @@ extern void PageRepairFragmentation(Page page);
 extern Size PageGetFreeSpace(Page page);
 extern Size PageGetFreeSpaceForMultipleTuples(Page page, int ntups);
 extern Size PageGetExactFreeSpace(Page page);
+#ifdef J3VM
+extern Size PageGetHeapFreeSpaceWithLP(Page page, int num_lp);
+#endif
 extern Size PageGetHeapFreeSpace(Page page);
 extern void PageIndexTupleDelete(Page page, OffsetNumber offset);
 extern void PageIndexMultiDelete(Page page, OffsetNumber *itemnos, int nitems);

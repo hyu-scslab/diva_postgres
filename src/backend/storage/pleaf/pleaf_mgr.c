@@ -183,8 +183,10 @@ PLeafManagerMain(void)
 		PLeafCleanOldGeneration();
 
 		PLeafGetCurrentTime(&now);
-		if (PLeafGetTimeElapsedInSeconds(now, base) >= PLeafGenerationDelay)
+		if (PLeafNeedsNewGeneration())
 		{
+      // TODO: check point for generation change
+      /* Create new generation */
 			PLeafMakeNewGeneration();
 			base = now;
 		}

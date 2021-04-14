@@ -137,22 +137,30 @@ int		NPLeafBuffers = PLEAF_NUM_PAGE;
 #else
 /* Default : 40M */
 int		NPLeafBuffers = 1000 * 10;
-#endif
+#endif /* PLEAF_NUM_PAGE */
 
 #ifdef PLEAF_NUM_INSTANCE
 int		NPLeafInstances = PLEAF_NUM_INSTANCE; /* We use 4-bit */
 #else
 int		NPLeafInstances = 4;
-#endif
+#endif /* PLEAF_NUM_INSTANCE */
 
 #ifdef PLEAF_INIT_PAGES
 /* NPLeafInitPages is the number of pages per instance in initialization */
 int NPLeafInitPages = PLEAF_INIT_PAGES;
 #else
 int NPLeafInitPages = 100;
-#endif
+#endif /* PLEAF_INIT_PAGES */
 
-#endif
+#ifdef EBI_NUM_PAGE
+int		NEbiTreeBuffers = EBI_NUM_PAGE;
+#else
+/* Default : 40M */
+// int		NEbiTreeBuffers = 1000 * 10;
+int		NEbiTreeBuffers = 10 * 10;
+#endif  /* EBI_NUM_PAGE */
+
+#endif /* J3VM */
 int			MaxConnections = 90;
 int			max_worker_processes = 8;
 int			max_parallel_workers = 8;

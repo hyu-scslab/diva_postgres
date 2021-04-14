@@ -30,6 +30,7 @@
 #include "postmaster/walwriter.h"
 #include "storage/bufmgr.h"
 #include "storage/condition_variable.h"
+#include "storage/ebi_tree_buf.h"
 #include "storage/fd.h"
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
@@ -65,8 +66,8 @@ static void EbiTreeDsaDetach(void);
  * This is invoked from AuxiliaryProcessMain, which has already created the
  * basic execution environment, but not enabled signals yet.
  */
-void EbiTreeProcessMain(void) {
-	elog(LOG, "Ebi process main");
+void
+EbiTreeProcessMain(void) {
   sigjmp_buf local_sigjmp_buf;
   MemoryContext ebitree_context;
 
@@ -101,8 +102,8 @@ void EbiTreeProcessMain(void) {
    * possible memory leaks.  Formerly this code just ran in
    * TopMemoryContext, but resetting that would be a really bad idea.
    */
-  ebitree_context = AllocSetContextCreate(TopMemoryContext, "EBI Tree",
-                                          ALLOCSET_DEFAULT_SIZES);
+  ebitree_context = AllocSetContextCreate(
+      TopMemoryContext, "EBI Tree", ALLOCSET_DEFAULT_SIZES);
   MemoryContextSwitchTo(ebitree_context);
 
   /*
@@ -178,9 +179,10 @@ void EbiTreeProcessMain(void) {
    */
   ProcGlobal->ebitreeLatch = &MyProc->procLatch;
 
-	EbiTreeDsaInit();
+  EbiTreeDsaInit();
 
-	elog(LOG, "Start loop");
+  elog(LOG, "Start loop");
+
   /*
    * Loop forever
    */
@@ -198,22 +200,30 @@ void EbiTreeProcessMain(void) {
 
     /* EBI tree operations */
     if (!IsEmpty(ebitree_dsa_area, EbiTreeShmem->unlink_queue)) {
-      DeleteNodes(EbiTreeShmem->ebitree);
+      DeleteNodes(EbiTreeShmem->ebitree, EbiTreeShmem->unlink_queue);
+    }
+
+    if (!IsEmpty(ebitree_dsa_area, EbiTreeShmem->delete_queue)) {
+      // DeleteSegments(EbiTreeShmem->delete_queue);
     }
 
     if (NeedsNewNode(EbiTreeShmem->ebitree)) {
       InsertNode(EbiTreeShmem->ebitree);
     }
 
-    (void)WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
-                    cur_timeout, WAIT_EVENT_EBI_TREE_MAIN);
+    (void)WaitLatch(
+        MyLatch,
+        WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
+        cur_timeout,
+        WAIT_EVENT_EBI_TREE_MAIN);
   }
 }
 
 /*
  * Process any new interrupts.
  */
-static void HandleEbiTreeProcessInterrupts(void) {
+static void
+HandleEbiTreeProcessInterrupts(void) {
   if (ProcSignalBarrierPending) ProcessProcSignalBarrier();
 
   if (ConfigReloadPending) {
@@ -222,8 +232,11 @@ static void HandleEbiTreeProcessInterrupts(void) {
   }
 
   if (ShutdownRequestPending) {
-    EbiTreeDsaDetach();
     DeleteEbiTree(EbiTreeShmem->ebitree);
+    DeleteQueue(ebitree_dsa_area, EbiTreeShmem->unlink_queue);
+    DeleteQueue(ebitree_dsa_area, EbiTreeShmem->delete_queue);
+
+    EbiTreeDsaDetach();
     /* Normal exit from the EBI tree process is here */
     proc_exit(0); /* done */
   }
@@ -238,10 +251,13 @@ static void HandleEbiTreeProcessInterrupts(void) {
  * EbiTreeShmemSize
  *		Compute space needed for EBI tree related shared memory
  */
-Size EbiTreeShmemSize(void) {
+Size
+EbiTreeShmemSize(void) {
   Size size = 0;
 
   size = add_size(size, sizeof(EbiTreeShmemStruct));
+
+  size = add_size(size, EbiTreeBufShmemSize());
 
   return size;
 }
@@ -250,7 +266,8 @@ Size EbiTreeShmemSize(void) {
  * EbiTreeShmemInit
  *		Allocate and initialize EBI tree related shared memory
  */
-void EbiTreeShmemInit(void) {
+void
+EbiTreeShmemInit(void) {
   Size size = EbiTreeShmemSize();
   bool found;
 
@@ -261,6 +278,8 @@ void EbiTreeShmemInit(void) {
 
   EbiTreeShmem =
       (EbiTreeShmemStruct *)ShmemInitStruct("EBI Tree Data", size, &found);
+  EbiTreeShmem->seg_id = 1;
+  pg_atomic_init_u64(&EbiTreeShmem->num_versions, 0);
 
   if (!found) {
     /*
@@ -270,10 +289,13 @@ void EbiTreeShmemInit(void) {
     Assert(EbiTreeShmem != NULL);
   }
 
+  EbiTreeBufInit();
+
   LWLockRelease(AddinShmemInitLock);
 }
 
-void EbiTreeDsaInit(void) {
+void
+EbiTreeDsaInit(void) {
   /* This process is selected to create dsa_area itself */
 
   /*
@@ -283,7 +305,8 @@ void EbiTreeDsaInit(void) {
   if (EbiTreeShmem->handle == 0) {
     uint32 expected = 0;
     if (pg_atomic_compare_exchange_u32(
-            (pg_atomic_uint32 *)(&EbiTreeShmem->handle), &expected,
+            (pg_atomic_uint32 *)(&EbiTreeShmem->handle),
+            &expected,
             UINT32_MAX)) {
       dsa_area *area;
       dsa_handle handle;
@@ -318,14 +341,16 @@ void EbiTreeDsaInit(void) {
   EbiTreeDsaAttach();
 }
 
-static void EbiTreeDsaAttach(void) {
+static void
+EbiTreeDsaAttach(void) {
   if (ebitree_dsa_area != NULL) return;
 
   ebitree_dsa_area = dsa_attach(EbiTreeShmem->handle);
   dsa_pin_mapping(ebitree_dsa_area);
 }
 
-static void EbiTreeDsaDetach(void) {
+static void
+EbiTreeDsaDetach(void) {
   if (ebitree_dsa_area == NULL) return;
 
   dsa_detach(ebitree_dsa_area);

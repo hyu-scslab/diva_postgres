@@ -46,6 +46,7 @@
 
 #ifdef J3VM
 #include "storage/pleaf.h"
+#include "storage/ebi_tree_buf.h"
 #endif
 static void reform_and_rewrite_tuple(HeapTuple tuple,
 									 Relation OldHeap, Relation NewHeap,
@@ -2436,6 +2437,7 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 						heap_copytuple(&loctup);
 
 					// Unref(ret_id) in EBI-page
+          EbiTreeBufUnref(ret_id);
 
 					hscan->rs_vistuples[ntup] = offnum;
 					ntup++;

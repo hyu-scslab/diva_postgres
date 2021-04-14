@@ -31,10 +31,13 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include "storage/pleaf.h"
 #include "storage/pleaf_stack_helper.h"
 #include "storage/pleaf_bufpage.h"
 #include "storage/pleaf_buf.h"
 #include "storage/pleaf_hash.h"
+
+#include "postmaster/ebi_tree_process.h"
 
 /* in globals.c ... see also miscadmin.h */
 extern PGDLLIMPORT int NPLeafBuffers;
@@ -94,6 +97,9 @@ static int PLeafGetPoolIndex(PLeafGenNumber gen_no);
 static void PLeafCleanOldStacks(int pool_index);
 static void PLeafCleanOldFile(int pool_index);
 
+/*
+ * Shared memory size
+ */
 Size
 PLeafShmemSize(void)
 {
@@ -131,6 +137,9 @@ PLeafShmemSize(void)
 	return size;
 }
 
+/*
+ * Shared memory initialization
+ */
 void
 PLeafInit(void)
 {
@@ -1232,6 +1241,35 @@ static void
 PLeafCleanOldFile(int old_index)
 {
 	PLeafInitDataFile(old_index);
+}
+
+/*
+ * PLeafNeedsNewGeneration
+ * 
+ * Checks if a new generation is needed
+ * by comparing the current pleaf generation's maximum version number
+ * and the currently existing version count collected by the EBI-tree.
+ */
+bool 
+PLeafNeedsNewGeneration(void)
+{
+  bool ret;
+  uint64 num_versions;
+  PLeafGenNumber gen_no;
+  int pool_index;
+  PLeafPageId max_page_id;
+  double fraction;
+
+  num_versions = pg_atomic_read_u64(&EbiTreeShmem->num_versions);
+
+  gen_no = PLeafGetLatestGenerationNumber();
+	pool_index = PLeafGetPoolIndex(gen_no);
+  max_page_id = PLeafMetadata->pleafmeta.max_page_ids[pool_index];
+
+  fraction = ((double) num_versions) / (max_page_id * PLEAF_MAX_CAPACITY);
+  ret = (fraction < PLEAF_GENERATION_THRESHOLD);
+
+  return ret;
 }
 
 #endif

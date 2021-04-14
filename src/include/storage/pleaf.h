@@ -51,9 +51,9 @@ PLeafIsLeftUpdate(
 		int* ret_status);
 
 extern void
-J3VMShmemInit(void);
+PLeafInit(void);
 
 extern Size
-J3VMShmemSize(void);
+PLeafShmemSize(void);
 
 #endif /* PLEAF_H */

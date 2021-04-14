@@ -71,6 +71,7 @@
 
 #ifdef J3VM
 #include "storage/pleaf.h"
+#include "storage/ebi_tree_buf.h"
 /* Tricky variable for passing the cmd type from ExecutePlan to heap code */
 CmdType curr_cmdtype;
 #endif
@@ -571,6 +572,7 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 				scan->rs_vistuples_copied[ntup] = heap_copytuple(&loctup);
 				
 				// Unref(ret_id) in EBI-page
+        EbiTreeBufUnref(ret_id);
 
 				scan->rs_vistuples[ntup] = lineoff;
 				ntup++;
@@ -1922,6 +1924,7 @@ heap_hot_search_buffer_with_vc(ItemPointer tid, Relation relation,
 		*copied_tuple = heap_copytuple(heapTuple);
 
 		// Unref(ret_id) in EBI-page
+    EbiTreeBufUnref(ret_id);
 
 		if (all_dead)
 			*all_dead = false;

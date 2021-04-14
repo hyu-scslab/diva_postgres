@@ -156,7 +156,7 @@ CreateSharedMemoryAndSemaphores(void)
 		size = add_size(size, AsyncShmemSize());
 #ifdef J3VM /* add_size our system in here */
 		size = add_size(size, EbiTreeShmemSize());
-		size = add_size(size, J3VMShmemSize());
+		size = add_size(size, PLeafShmemSize());
 #endif
 #ifdef EXEC_BACKEND
 		size = add_size(size, ShmemBackendArraySize());
@@ -277,7 +277,7 @@ CreateSharedMemoryAndSemaphores(void)
 
 #ifdef J3VM /* Initialize our system in here */
 	EbiTreeShmemInit();
-	J3VMShmemInit();
+  PLeafInit();
 #endif
 
 #ifdef EXEC_BACKEND

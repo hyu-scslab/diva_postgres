@@ -23,6 +23,8 @@
 
 #define InvalidGid ((PLeafGenNumber)(-1))
 
+#define PLEAF_GENERATION_THRESHOLD (0.7)
+
 /*
  * PLeaf buffer tag identifies which disk block the buffer contains 
  */
@@ -167,10 +169,6 @@ typedef PLeafFreeManagerData* PLeafFreeManager;
 extern PLeafFreePool PLeafGetFreePool(PLeafGenNumber gen_no);
 extern PLeafGenNumber PLeafGetLatestGenerationNumber(void);
 
-extern void PLeafInit(void);
-
-extern Size PLeafShmemSize(void);
-
 extern bool PLeafIsOffsetValid(PLeafOffset offset);
 
 extern bool PLeafIsGenerationNumberValidInUpdate(PLeafGenNumber left, 
@@ -212,5 +210,7 @@ extern PLeafPageId PLeafFrameToPageId(int frame_id);
 
 extern void PLeafMakeNewGeneration(void);
 extern void PLeafCleanOldGeneration(void);
+
+extern bool PLeafNeedsNewGeneration(void);
 
 #endif /* PLEAF_BUF_H */

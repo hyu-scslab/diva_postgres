@@ -19,6 +19,8 @@
 #include "utils/snapmgr.h"
 #include "storage/lwlock.h"
 
+#include "storage/ebi_tree.h"
+#include "storage/ebi_tree_buf.h"
 #include "storage/pleaf_stack_helper.h"
 #include "storage/pleaf_bufpage.h"
 #include "storage/pleaf_buf.h"
@@ -47,6 +49,7 @@ PLeafLookupTuple(
 	PLeafOffset	internal_offset;
 	PLeafVersionOffset version_offset;
 	bool version_found;
+	int ebi_page_frame_id;
 
 	/*
 	 * Offset value in record
@@ -98,10 +101,12 @@ PLeafLookupTuple(
 	
 	/* Read value from EBI-Tree */
 	// API in EBI-Tree
-	// EBI(version_offset, tuple_size, ret_value); ...
+	// TODO: EBI(version_offset, tuple_size, ret_value); ...
+  ebi_page_frame_id = EbiTreeLookupVersion(version_offset, tuple_size,
+                                           ret_value);
 
 	// Return ebi-page-frame-id
-	return 0;
+	return ebi_page_frame_id;
 }
 
 /*
@@ -127,7 +132,8 @@ PLeafAppendTuple(
 	 * It can be already obsolete version
 	 * version_offset = EBI-APPEND-VERSION
 	 */
-	version_offset = 0;
+  // TODO: EBI Sift return value
+	version_offset = EbiTreeSiftAndBind(xmin, xmax, tuple_size, tuple, rwlock);
 
 	if (version_offset == PLEAF_INVALID_VERSION_OFFSET) {
 		return PLEAF_APPEND_NOTHING;
@@ -136,25 +142,6 @@ PLeafAppendTuple(
 	return PLeafAppendVersion(
 			offset, ret_offset, xmin, xmax, 
 			version_offset, tuple_size, tuple, rwlock);
-}
-
-
-/*
- * Shared memory initialization
- */
-void
-J3VMShmemInit(void)
-{
-	PLeafInit();
-}
-
-/*
- * Shared memory size
- */
-Size
-J3VMShmemSize(void)
-{
-	return PLeafShmemSize();
 }
 
 /*

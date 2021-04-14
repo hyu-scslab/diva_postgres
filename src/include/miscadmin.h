@@ -161,7 +161,11 @@ extern PGDLLIMPORT int NBuffers;
 extern PGDLLIMPORT int NPLeafBuffers;
 extern PGDLLIMPORT int NPLeafInstances;
 extern PGDLLIMPORT int NPLeafInitPages;
-#endif
+
+extern PGDLLIMPORT int NEbiTreeBuffers;
+extern PGDLLIMPORT int NEbiTreeInstances;
+extern PGDLLIMPORT int NEbiTreeInitPages;
+#endif /* J3VM */
 extern PGDLLIMPORT int MaxBackends;
 extern PGDLLIMPORT int MaxConnections;
 extern PGDLLIMPORT int max_worker_processes;

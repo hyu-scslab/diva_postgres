@@ -29,6 +29,10 @@ typedef struct {
   dsa_pointer ebitree;      /* EbiTree */
   dsa_pointer unlink_queue; /* MpscQueue */
   dsa_pointer delete_queue; /* MpscQueue */
+
+  int seg_id; /* next seg_id */
+
+  pg_atomic_uint64 num_versions; /* Estimated number of versions in the tree */
 } EbiTreeShmemStruct;
 
 extern EbiTreeShmemStruct* EbiTreeShmem;

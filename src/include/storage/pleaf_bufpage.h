@@ -99,6 +99,11 @@ typedef struct {
 	 * 4byte : xmax
 	 */
 	PLeafVersionId version_id;
+	/*
+	 * Bits in version offset (msb to lsb)
+	 * 4byte : segment id 
+	 * 4byte : offset 
+	 */
 	PLeafVersionOffset version_offset;
 } PLeafVersionData;
 

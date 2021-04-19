@@ -19,7 +19,7 @@
 #define EBI_TREE_SEG_PAGESZ (BLCKSZ)
 
 typedef struct EbiTreeBufTag {
-  EbiTreeSegmentId seg_id;
+  EbiTreeSegmentId seg_id; /* TODO: comment on relationship with epoch id */
   EbiTreeSegmentPageId page_id;
 } EbiTreeBufTag;
 
@@ -29,15 +29,6 @@ typedef struct EbiTreeBufDesc {
 
   /* Whether the page is not yet synced */
   bool is_dirty;
-
-  /*
-   * Written bytes on this cache entry. If it gets same with the page size,
-   * it can be unpinned and ready to flush.
-   *
-   * NOTE: At this time, we don't care about tuples overlapped between
-   * two pages.
-   */
-  pg_atomic_uint32 written_bytes;
 
   /*
    * Buffer entry with refcnt > 0 cannot be evicted.

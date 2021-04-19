@@ -28,7 +28,6 @@ typedef struct {
   dsa_handle handle;
   dsa_pointer ebitree;      /* EbiTree */
   dsa_pointer unlink_queue; /* MpscQueue */
-  dsa_pointer delete_queue; /* MpscQueue */
 
   int seg_id; /* next seg_id */
 

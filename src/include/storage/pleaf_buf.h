@@ -23,7 +23,7 @@
 
 #define InvalidGid ((PLeafGenNumber)(-1))
 
-#define PLEAF_GENERATION_THRESHOLD (0.7)
+#define PLEAF_GENERATION_THRESHOLD (0.1)
 
 /*
  * PLeaf buffer tag identifies which disk block the buffer contains 

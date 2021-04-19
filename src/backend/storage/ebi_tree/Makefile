@@ -16,6 +16,6 @@ OBJS = \
 	ebi_tree.o \
 	ebi_tree_buf.o \
 	ebi_tree_hash.o \
-	mpsc_queue.o \
+	ebi_tree_utils.o \
 
 include $(top_srcdir)/src/backend/common.mk

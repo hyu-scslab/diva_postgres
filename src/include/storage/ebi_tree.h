@@ -18,6 +18,8 @@
 #include "utils/dsa.h"
 #include "utils/snapshot.h"
 
+#include "storage/ebi_tree_utils.h"
+
 /*
  * Actual EBI tree structure.
  * */
@@ -44,7 +46,7 @@ typedef struct EbiNodeData {
   dsa_pointer parent;
   dsa_pointer left;
   dsa_pointer right;
-  dsa_pointer proxy;
+  dsa_pointer proxy_target;
 
   uint32 height;
   pg_atomic_uint32 refcnt;
@@ -55,18 +57,23 @@ typedef struct EbiNodeData {
   EbiTreeSegmentId seg_id;       /* file segment */
   pg_atomic_uint32 seg_offset;   /* aligned version offset */
   pg_atomic_uint64 num_versions; /* number of versions */
+
+  TransactionId max_xid; /* used for physical deletion */
 } EbiNodeData;
 
 typedef struct EbiNodeData* EbiNode;
 
 typedef struct EbiTreeData {
-  dsa_pointer root;
-  dsa_pointer recent_node;
+  dsa_pointer root;        /* EbiNode */
+  dsa_pointer recent_node; /* EbiNode */
 } EbiTreeData;
 
 typedef struct EbiTreeData* EbiTree;
 
 /* Public functions */
+EbiTree ConvertToEbiTree(dsa_area* area, dsa_pointer ptr);
+EbiNode ConvertToEbiNode(dsa_area* area, dsa_pointer ptr);
+
 extern dsa_pointer EbiIncreaseRefCount(Snapshot snapshot);
 extern void EbiDecreaseRefCount(dsa_pointer node);
 
@@ -74,9 +81,12 @@ extern dsa_pointer InitEbiTree(dsa_area* area);
 extern void DeleteEbiTree(dsa_pointer dsa_ebitree);
 
 extern void InsertNode(dsa_pointer dsa_ebitree);
-extern void DeleteNodes(dsa_pointer dsa_ebitree, dsa_pointer unlink_queue);
+extern void UnlinkNodes(
+    dsa_pointer dsa_ebitree,
+    dsa_pointer unlink_queue,
+    EbiList delete_list);
 
-extern void DeleteSegments(dsa_pointer delete_queue);
+extern void DeleteNodes(EbiList delete_list);
 
 extern bool NeedsNewNode(dsa_pointer dsa_ebitree);
 
@@ -93,6 +103,8 @@ extern int EbiTreeLookupVersion(
     EbiTreeVersionOffset version_offset,
     Size tuple_size,
     void** ret_value);
+
+extern bool EbiTreeSegIsAlive(dsa_pointer dsa_ebitree, EbiTreeSegmentId seg_id);
 
 /* Debug */
 void PrintEbiTree(dsa_pointer dsa_ebitree);

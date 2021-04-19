@@ -20,7 +20,8 @@
 #include "postmaster/ebi_tree_process.h"
 #include "storage/ebi_tree.h"
 #include "storage/ebi_tree_buf.h"
-#include "storage/mpsc_queue.h"
+#include "storage/ebi_tree_utils.h"
+#include "storage/procarray.h"
 #include "utils/dynahash.h"
 #include "utils/snapmgr.h"
 
@@ -34,15 +35,19 @@ dsa_area* ebitree_dsa_area;
 /* Allocation */
 static dsa_pointer CreateNodeWithHeight(dsa_area* area, uint32 height);
 static dsa_pointer CreateNode(dsa_area* area);
-static void DeleteNode(EbiTree ebitree, EbiNode node);
 
 /* Insertion */
 static dsa_pointer FindInsertionTargetNode(EbiTree ebitree);
 
 /* Deletion */
+static void
+UnlinkNode(EbiTree ebitree, dsa_pointer dsa_node, EbiList delete_list);
 static void UnlinkFromParent(EbiNode node);
-static void PushToGarbageQueue(dsa_pointer dsa_node);
-static void CompactNode(EbiTree ebitree, EbiNode node);
+static void PushToGarbageQueue(EbiList delete_list, dsa_pointer dsa_node);
+static void CompactNode(EbiTree ebitree, dsa_pointer dsa_node);
+static void DeleteNode(EbiListElement element);
+
+static void LinkProxy(dsa_pointer dsa_proxy, dsa_pointer dsa_proxy_target);
 
 /* Reference Counting */
 static uint32 IncreaseRefCount(EbiNode node);
@@ -58,9 +63,6 @@ static dsa_pointer SetRightBoundaryRecursive(
 static dsa_pointer DsaCopySnapshot(Snapshot snapshot);
 
 /* Utility */
-static EbiTree ConvertToEbiTree(dsa_area* area, dsa_pointer ptr);
-static EbiNode ConvertToEbiNode(dsa_area* area, dsa_pointer ptr);
-
 static bool HasParent(EbiNode node);
 static bool HasLeftChild(EbiNode node);
 static bool IsLeftChild(EbiNode node);
@@ -107,7 +109,7 @@ CreateNodeWithHeight(dsa_area* area, uint32 height) {
   node->parent = InvalidDsaPointer;
   node->left = InvalidDsaPointer;
   node->right = InvalidDsaPointer;
-  node->proxy = InvalidDsaPointer;
+  node->proxy_target = InvalidDsaPointer;
   node->height = height;
   pg_atomic_init_u32(&node->refcnt, 0);
   node->left_boundary = InvalidDsaPointer;
@@ -185,9 +187,6 @@ InsertNode(dsa_pointer dsa_ebitree) {
   new_leaf = ConvertToEbiNode(ebitree_dsa_area, dsa_new_leaf);
 
   // Set the left bound of the new parent to the left child's left bound.
-  // TODO: snapshot allocation with DSA
-  // (before) new_parent->left_boundary = target->left_boundary;
-  // (after) SetLeftBoundary(new_parent, target->left_boundary);
   snap = (Snapshot)dsa_get_address(ebitree_dsa_area, target->left_boundary);
   SetLeftBoundary(new_parent, snap);
 
@@ -399,6 +398,12 @@ EbiDecreaseRefCount(dsa_pointer dsa_node) {
 
   if (refcnt == 0) {
     Enqueue(ebitree_dsa_area, EbiTreeShmem->unlink_queue, dsa_node);
+    ereport(
+        LOG,
+        (errmsg(
+            "[HYU] ENQUEUE seg_id: %d, height: %d",
+            node->seg_id,
+            node->height)));
   }
 }
 
@@ -410,9 +415,11 @@ DecreaseRefCount(EbiNode node) {
 }
 
 void
-DeleteNodes(dsa_pointer dsa_ebitree, dsa_pointer unlink_queue) {
+UnlinkNodes(
+    dsa_pointer dsa_ebitree,
+    dsa_pointer unlink_queue,
+    EbiList delete_list) {
   dsa_pointer dsa_tmp;
-  EbiNode tmp;
   EbiTree ebitree;
 
   ebitree = ConvertToEbiTree(ebitree_dsa_area, dsa_ebitree);
@@ -420,37 +427,27 @@ DeleteNodes(dsa_pointer dsa_ebitree, dsa_pointer unlink_queue) {
   dsa_tmp = Dequeue(ebitree_dsa_area, unlink_queue);
 
   while (DsaPointerIsValid(dsa_tmp)) {
-    tmp = ConvertToEbiNode(ebitree_dsa_area, dsa_tmp);
-
     // Logical deletion
-    DeleteNode(ebitree, tmp);
-
-    // Prepare it for physical deletion
-    PushToGarbageQueue(dsa_tmp);
+    UnlinkNode(ebitree, dsa_tmp, delete_list);
 
     dsa_tmp = Dequeue(ebitree_dsa_area, unlink_queue);
   }
 }
 
 static void
-DeleteNode(EbiTree ebitree, EbiNode node) {
-  EbiNode tmp;
+UnlinkNode(EbiTree ebitree, dsa_pointer dsa_node, EbiList delete_list) {
+  EbiNode node;
+
+  node = ConvertToEbiNode(ebitree_dsa_area, dsa_node);
 
   // Logical deletion, takes it off from the EBI-tree
   UnlinkFromParent(node);
 
+  // Prepare it for physical deletion
+  PushToGarbageQueue(delete_list, dsa_node);
+
   // Compaction
-  CompactNode(ebitree, ConvertToEbiNode(ebitree_dsa_area, node->parent));
-
-  // Remove the segment file related to the node
-  EbiTreeRemoveSegmentFile(node->seg_id);
-
-  // Remove proxy nodes' segment files
-  tmp = node;
-  while (DsaPointerIsValid(tmp->proxy)) {
-    tmp = ConvertToEbiNode(ebitree_dsa_area, tmp->proxy);
-    EbiTreeRemoveSegmentFile(tmp->seg_id);
-  }
+  CompactNode(ebitree, node->parent);
 }
 
 static void
@@ -466,6 +463,15 @@ UnlinkFromParent(EbiNode node) {
     parent->right = InvalidDsaPointer;
   }
 
+  node->max_xid = EbiTreeGetMaxTransactionId();
+
+  ereport(
+      LOG,
+      (errmsg(
+          "[HYU] DEQUEUE seg_id: %d, max_xid: %d",
+          node->seg_id,
+          node->max_xid)));
+
   /* Version counter */
   num_versions = pg_atomic_read_u64(&node->num_versions);
   num_versions = num_versions - (num_versions % NUM_VERSIONS_PER_CHUNK);
@@ -473,28 +479,34 @@ UnlinkFromParent(EbiNode node) {
 }
 
 static void
-PushToGarbageQueue(dsa_pointer dsa_node) {
-  Enqueue(ebitree_dsa_area, EbiTreeShmem->delete_queue, dsa_node);
+PushToGarbageQueue(EbiList delete_list, dsa_pointer dsa_node) {
+  EbiListInsert(ebitree_dsa_area, delete_list, dsa_node);
 }
 
 static void
-CompactNode(EbiTree ebitree, EbiNode node) {
+CompactNode(EbiTree ebitree, dsa_pointer dsa_node) {
+  EbiNode node, tmp;
+  dsa_pointer proxy_target;
   uint32 original_height;
 
+  proxy_target = dsa_node;
+  node = ConvertToEbiNode(ebitree_dsa_area, dsa_node);
+
   if (HasParent(node) == false) {
+    // When the root's child is being compacted
     EbiNode root;
 
-    // When the root's child is being compacted
     if (HasLeftChild(node)) {
+      LinkProxy(node->left, proxy_target);
       ebitree->root = node->left;
     } else {
+      LinkProxy(node->right, proxy_target);
       ebitree->root = node->right;
     }
     root = ConvertToEbiNode(ebitree_dsa_area, ebitree->root);
     root->parent = InvalidDsaPointer;
   } else {
     EbiNode parent;
-    EbiNode tmp;
     dsa_pointer tmp_ptr;
 
     parent = ConvertToEbiNode(ebitree_dsa_area, node->parent);
@@ -502,15 +514,19 @@ CompactNode(EbiTree ebitree, EbiNode node) {
     // Compact the one-and-only child and its parent
     if (IsLeftChild(node)) {
       if (HasLeftChild(node)) {
+        LinkProxy(node->left, proxy_target);
         parent->left = node->left;
       } else {
+        LinkProxy(node->right, proxy_target);
         parent->left = node->right;
       }
       tmp = ConvertToEbiNode(ebitree_dsa_area, parent->left);
     } else {
       if (HasLeftChild(node)) {
+        LinkProxy(node->left, proxy_target);
         parent->right = node->left;
       } else {
+        LinkProxy(node->right, proxy_target);
         parent->right = node->right;
       }
       tmp = ConvertToEbiNode(ebitree_dsa_area, parent->right);
@@ -537,55 +553,66 @@ CompactNode(EbiTree ebitree, EbiNode node) {
       tmp_ptr = curr->parent;
     }
   }
+}
 
-  // TODO: compacted_next should be set for GC later on
+static void
+LinkProxy(dsa_pointer dsa_proxy, dsa_pointer dsa_proxy_target) {
+  EbiNode proxy, new_proxy_target;
+
+  proxy = ConvertToEbiNode(ebitree_dsa_area, dsa_proxy);
+
+  if (DsaPointerIsValid(proxy->proxy_target)) {
+    new_proxy_target = ConvertToEbiNode(ebitree_dsa_area, dsa_proxy_target);
+    new_proxy_target->proxy_target = proxy->proxy_target;
+  }
+
+  proxy->proxy_target = dsa_proxy_target;
 }
 
 void
-DeleteSegments(dsa_pointer delete_queue) {
-  dsa_pointer dsa_tmp;
-  EbiNode tmp;
+DeleteNodes(EbiList delete_list) {
   TransactionId oldest_active_xid;
+  EbiListElement curr, tmp;
+  EbiNode curr_node;
 
-  Assert(DsaPointerIsValid(delete_queue));
-
-#if 0
   oldest_active_xid = EbiTreeGetOldestActiveTransactionId();
 
-  dsa_tmp = Dequeue(ebitree_dsa_area, delete_queue);
+  curr = delete_list->head;
 
-  while (DsaPointerIsValid(dsa_tmp)) {
-    tmp = ConvertToEbiNode(ebitree_dsa_area, dsa_tmp);
+  while (curr != NULL) {
+    curr_node = ConvertToEbiNode(ebitree_dsa_area, curr->dsa_node);
 
-    EbiTreeRemoveSegmentFile(tmp->seg_id);
+    if (curr_node->max_xid > oldest_active_xid) {
+      break;
+    }
 
-    dsa_tmp = Dequeue(ebitree_dsa_area, delete_queue);
+    tmp = curr->next;
+    DeleteNode(curr);
+    curr = tmp;
   }
 
-  PLeafMeta* meta;
-  int old_index;
+  delete_list->head = curr;
+}
 
-  oldest_active_xid = PLeafGetOldestActiveTransactionId();
+static void
+DeleteNode(EbiListElement element) {
+  dsa_pointer curr_dsa_node, tmp;
+  EbiNode curr_node;
 
-  if (!((oldest_active_xid == MyMaxTransactionId) ||
-        (meta->generation_max_xid <= oldest_active_xid)))
-    return;
+  curr_dsa_node = element->dsa_node;
 
-  /*
-   * XXX:
-   * It is important to acquire exclusive latch to solve race condition
-   * between PLeafWritePage() and PLeafCleanOldGeneration().
-   */
-  LWLockAcquire(&PLeafBufferIOLWLockArray[old_index].lock, LW_EXCLUSIVE);
-  meta->generation_numbers[old_index] = 0;
-  LWLockRelease(&PLeafBufferIOLWLockArray[old_index].lock);
+  while (DsaPointerIsValid(curr_dsa_node)) {
+    curr_node = ConvertToEbiNode(ebitree_dsa_area, curr_dsa_node);
 
-  /* Initialize stacks in an old pool */
-  PLeafCleanOldStacks(old_index);
+    tmp = curr_node->proxy_target;
 
-  /* Initialize old file */
-  PLeafCleanOldFile(old_index);
-#endif
+    EbiTreeRemoveSegmentFile(curr_node->seg_id);
+    dsa_free(ebitree_dsa_area, curr_dsa_node);
+
+    curr_dsa_node = tmp;
+  }
+
+  pfree(element);
 }
 
 EbiNode
@@ -678,6 +705,7 @@ EbiTreeSiftAndBind(
   EbiTreeSegmentId seg_id;
   EbiTreeSegmentOffset seg_offset;
   Size aligned_tuple_size;
+  bool found;
   EbiTreeVersionOffset ret;
   uint64 num_versions;
 
@@ -692,8 +720,17 @@ EbiTreeSiftAndBind(
 
   aligned_tuple_size = 1 << my_log2(tuple_size);
 
+  /* We currently forbid tuples with sizes that are larger than the page size */
+  Assert(aligned_tuple_size <= EBI_TREE_SEG_PAGESZ);
+
   seg_id = node->seg_id;
-  seg_offset = pg_atomic_fetch_add_u32(&node->seg_offset, aligned_tuple_size);
+  do {
+    seg_offset = pg_atomic_fetch_add_u32(&node->seg_offset, aligned_tuple_size);
+
+    /* Checking if the tuple could be written within a single page */
+    found = seg_offset / EBI_TREE_SEG_PAGESZ ==
+            (seg_offset + aligned_tuple_size - 1) / EBI_TREE_SEG_PAGESZ;
+  } while (!found);
 
   // Write version to segment
   EbiTreeAppendVersion(seg_id, seg_offset, tuple_size, tuple, rwlock);
@@ -707,6 +744,16 @@ EbiTreeSiftAndBind(
   }
 
   ret = EBI_TREE_SEG_TO_VERSION_OFFSET(seg_id, seg_offset);
+
+  /*
+  ereport(
+      LOG,
+      (errmsg(
+          "WRITING seg_id: %d, seg_offset: %d, ret: %lu",
+          seg_id,
+          seg_offset,
+          ret)));
+          */
 
   return ret;
 }
@@ -723,6 +770,16 @@ EbiTreeLookupVersion(
   seg_id = EBI_TREE_VERSION_OFFSET_TO_SEG_ID(version_offset);
   seg_offset = EBI_TREE_VERSION_OFFSET_TO_SEG_OFFSET(version_offset);
 
+  /*
+  ereport(
+      LOG,
+      (errmsg(
+          "READING seg_id: %d, seg_offset: %d, ret: %lu",
+          seg_id,
+          seg_offset,
+          EBI_TREE_SEG_TO_VERSION_OFFSET(seg_id, seg_offset))));
+          */
+
   Assert(seg_id >= 1);
   Assert(seg_offset >= 0);
 
@@ -732,19 +789,64 @@ EbiTreeLookupVersion(
   return buf_id;
 }
 
-/**
- * Utility Functions
- */
+bool
+EbiTreeSegIsAlive(dsa_pointer dsa_ebitree, EbiTreeSegmentId seg_id) {
+  EbiTree ebitree;
+  dsa_pointer dsa_curr;
+  EbiNode curr;
 
-static EbiTree
+  ebitree = ConvertToEbiTree(ebitree_dsa_area, dsa_ebitree);
+
+  dsa_curr = ebitree->root;
+  curr = ConvertToEbiNode(ebitree_dsa_area, dsa_curr);
+
+  while (!IsLeaf(curr)) {
+    if (curr->seg_id == seg_id) {
+      return true;
+    }
+
+    if (seg_id < curr->seg_id) {
+      dsa_curr = curr->left;
+    } else {
+      dsa_curr = curr->right;
+    }
+
+    /* It has been concurrently removed by the EBI-tree process */
+    if (!DsaPointerIsValid(dsa_curr)) {
+      return false;
+    }
+
+    curr = ConvertToEbiNode(ebitree_dsa_area, dsa_curr);
+  }
+
+  Assert(IsLeaf(curr));
+
+  while (DsaPointerIsValid(dsa_curr)) {
+    curr = ConvertToEbiNode(ebitree_dsa_area, dsa_curr);
+
+    if (curr->seg_id == seg_id) {
+      return true;
+    }
+
+    dsa_curr = curr->proxy_target;
+  }
+
+  return false;
+}
+
+EbiTree
 ConvertToEbiTree(dsa_area* area, dsa_pointer ptr) {
   return (EbiTree)dsa_get_address(area, ptr);
 }
 
-static EbiNode
+EbiNode
 ConvertToEbiNode(dsa_area* area, dsa_pointer ptr) {
   return (EbiNode)dsa_get_address(area, ptr);
 }
+
+/**
+ * Utility Functions
+ */
 
 static bool
 HasParent(EbiNode node) {
@@ -789,7 +891,7 @@ PrintEbiTree(dsa_pointer dsa_ebitree) {
   ebitree = ConvertToEbiTree(ebitree_dsa_area, dsa_ebitree);
   root = ConvertToEbiNode(ebitree_dsa_area, ebitree->root);
 
-  ereport(LOG, (errmsg("Print Tree")));
+  ereport(LOG, (errmsg("Print Tree (%d)", root->height)));
   PrintEbiTreeRecursive(root);
 }
 
@@ -802,12 +904,10 @@ PrintEbiTreeRecursive(EbiNode node) {
   ereport(
       LOG,
       (errmsg(
-          "%p, %d, %d | %ld, %ld",
-          node,
-          node->height,
-          pg_atomic_read_u32(&node->refcnt),
-          node->left_boundary,
-          node->right_boundary)));
+          "[HYU] seg_id: %d, offset: %d",
+          node->seg_id,
+          pg_atomic_read_u32(&node->seg_offset))));
   PrintEbiTreeRecursive(ConvertToEbiNode(ebitree_dsa_area, node->right));
 }
+
 #endif

@@ -31,10 +31,10 @@
 #include "storage/bufmgr.h"
 #include "storage/condition_variable.h"
 #include "storage/ebi_tree_buf.h"
+#include "storage/ebi_tree_utils.h"
 #include "storage/fd.h"
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
-#include "storage/mpsc_queue.h"
 #include "storage/pmsignal.h"
 #include "storage/proc.h"
 #include "storage/procsignal.h"
@@ -54,8 +54,12 @@ int EbiTreeDelay = 200 * 10;
 
 EbiTreeShmemStruct *EbiTreeShmem = NULL;
 
+EbiList delete_list;
+
 /* Prototypes for private functions */
 static void HandleEbiTreeProcessInterrupts(void);
+
+static void EbiTreeProcessInit(void);
 
 static void EbiTreeDsaAttach(void);
 static void EbiTreeDsaDetach(void);
@@ -179,9 +183,11 @@ EbiTreeProcessMain(void) {
    */
   ProcGlobal->ebitreeLatch = &MyProc->procLatch;
 
+  /* Initialize dsa area */
   EbiTreeDsaInit();
 
-  elog(LOG, "Start loop");
+  /* Initialize EBI-tree process's local variables */
+  EbiTreeProcessInit();
 
   /*
    * Loop forever
@@ -196,15 +202,16 @@ EbiTreeProcessMain(void) {
 
     cur_timeout = EbiTreeDelay;
 
-    PrintEbiTree(EbiTreeShmem->ebitree);
+    // PrintEbiTree(EbiTreeShmem->ebitree);
 
     /* EBI tree operations */
-    if (!IsEmpty(ebitree_dsa_area, EbiTreeShmem->unlink_queue)) {
-      DeleteNodes(EbiTreeShmem->ebitree, EbiTreeShmem->unlink_queue);
+    if (!QueueIsEmpty(ebitree_dsa_area, EbiTreeShmem->unlink_queue)) {
+      UnlinkNodes(
+          EbiTreeShmem->ebitree, EbiTreeShmem->unlink_queue, delete_list);
     }
 
-    if (!IsEmpty(ebitree_dsa_area, EbiTreeShmem->delete_queue)) {
-      // DeleteSegments(EbiTreeShmem->delete_queue);
+    if (!EbiListIsEmpty(delete_list)) {
+      DeleteNodes(delete_list);
     }
 
     if (NeedsNewNode(EbiTreeShmem->ebitree)) {
@@ -234,7 +241,7 @@ HandleEbiTreeProcessInterrupts(void) {
   if (ShutdownRequestPending) {
     DeleteEbiTree(EbiTreeShmem->ebitree);
     DeleteQueue(ebitree_dsa_area, EbiTreeShmem->unlink_queue);
-    DeleteQueue(ebitree_dsa_area, EbiTreeShmem->delete_queue);
+    EbiListDestroy(ebitree_dsa_area, delete_list);
 
     EbiTreeDsaDetach();
     /* Normal exit from the EBI tree process is here */
@@ -322,7 +329,6 @@ EbiTreeDsaInit(void) {
 
       /* Allocate queues in dsa */
       EbiTreeShmem->unlink_queue = InitQueue(area);
-      EbiTreeShmem->delete_queue = InitQueue(area);
 
       dsa_detach(area);
 
@@ -356,4 +362,10 @@ EbiTreeDsaDetach(void) {
   dsa_detach(ebitree_dsa_area);
   ebitree_dsa_area = NULL;
 }
+
+static void
+EbiTreeProcessInit(void) {
+  delete_list = (EbiList)palloc(sizeof(struct EbiListData));
+}
+
 #endif

@@ -128,11 +128,30 @@ heap_compute_data_size(TupleDesc tupleDesc,
 	{
 		Datum		val;
 		Form_pg_attribute atti;
+    
+		val = values[i];
 
+#ifdef J3VM 
+    /* 
+     * For SIRO versioning, take into account the null attributes to calculate
+     * the size of the records.
+     */
+		if (isnull[i])
+    {
+      atti = TupleDescAttr(tupleDesc, i);
+      if (atti->attlen > 0) {
+        /* keep allocate the attribute space even though it is null */
+			  data_length = att_align_datum(data_length, atti->attalign,
+            atti->attlen, val);
+        data_length = att_addlength_datum(data_length, atti->attlen, val);
+      }
+      continue;
+		}
+#else
 		if (isnull[i])
 			continue;
+#endif /* J3VM */
 
-		val = values[i];
 		atti = TupleDescAttr(tupleDesc, i);
 
 		if (ATT_IS_PACKABLE(atti) &&
@@ -1053,8 +1072,16 @@ heap_form_tuple(TupleDesc tupleDescriptor,
 	 */
 	len = offsetof(HeapTupleHeaderData, t_bits);
 
+#ifdef J3VM 
+  /*
+   * for fixed size row, we always put the null bitmap even if
+   * there is no null attribute at all in the tuple.
+   */
+  len += BITMAPLEN(numberOfAttributes);
+#else
 	if (hasnull)
 		len += BITMAPLEN(numberOfAttributes);
+#endif /* J3VM */
 
 	hoff = len = MAXALIGN(len); /* align user data safely */
 

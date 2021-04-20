@@ -437,6 +437,7 @@ heap_prune_oviraptor(Relation relation, Buffer buffer, OffsetNumber offnum,
 		}
 
 		/* Visibility check. */
+    // TODO(EBI): if (Sift(xmin, xmax) != null)
 		if (true)
 		//if (!RecIsInDeadZone(HeapTupleHeaderGetRawXmin(htup),
 		//			HeapTupleHeaderGetRawXmax(htup)))
@@ -490,6 +491,7 @@ heap_prune_oviraptor(Relation relation, Buffer buffer, OffsetNumber offnum,
 		}
 
 		/* Visibility check. */
+    // TODO(EBI): if (Sift(xmin, xmax) != null)
 		if (true)
 		//if (!RecIsInDeadZone(HeapTupleHeaderGetRawXmin(htup_right),
 		//			HeapTupleHeaderGetRawXmax(htup_right)))
@@ -502,6 +504,7 @@ heap_prune_oviraptor(Relation relation, Buffer buffer, OffsetNumber offnum,
 	/* Right one is done. Let's do this for the version chain. */
 
 	/* Check all visibility of all versions */
+  // TODO(EBI): call pleaf interface
 	/*if (!VersionChainIsInDeadZone(relation->rd_node.relNode, primary_key))
 	{
 		return ndeleted;

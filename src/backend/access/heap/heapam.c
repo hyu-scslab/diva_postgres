@@ -487,10 +487,6 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 
 			if (valid)
 			{
-				/* Copy visible tuple */
-				if (scan->rs_vistuples_copied[ntup] != NULL)
-					heap_freetuple(scan->rs_vistuples_copied[ntup]);
-
 				scan->rs_vistuples_copied[ntup] = heap_copytuple(&loctup);
 
 				scan->rs_vistuples[ntup] = lineoff;
@@ -3869,7 +3865,7 @@ heap_update_with_vc(Relation relation, ItemPointer otid, HeapTuple newtup,
 	 *                   Provisional Index
 	 */
 	TransactionId xmin;
-	TransactionId xmax;
+	TransactionId xmax = 0;
 //	Datum     primary_key;
 //	Bitmapset    *bms_pk;
 //	int       attnum_pk;

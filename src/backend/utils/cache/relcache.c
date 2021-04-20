@@ -6418,28 +6418,17 @@ unlink_initfile(const char *initfilename, int elevel)
  */
 bool IsOviraptor(Relation relation)
 {
-	Bitmapset* bms_pk;
-
 	if (relation == NULL)
 		return false;
-	if (relation->is_systable)
-		return false;
 
-	if (relation->rd_indexattr == NULL)
-	{
-		RelationGetIndexAttrBitmap(
-				relation, INDEX_ATTR_BITMAP_PRIMARY_KEY);
-	}
+  if (IsSystemRelation(relation))
+    /* Skip system tables. */
+    return false;
 
-	if (relation->rd_indexattr != NULL)
-	{
-		bms_pk = RelationGetIndexAttrBitmap(
-				relation, INDEX_ATTR_BITMAP_PRIMARY_KEY);
+  if (relation->rd_node.dbNode == 1)
+    /* Skip information_schema */
+    return false;
 
-		if (bms_num_members(bms_pk) == 1)
-			return true;
-	}
-
-	return false;
+	return true;
 }
 #endif

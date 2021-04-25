@@ -398,12 +398,6 @@ EbiDecreaseRefCount(dsa_pointer dsa_node) {
 
   if (refcnt == 0) {
     Enqueue(ebitree_dsa_area, EbiTreeShmem->unlink_queue, dsa_node);
-    ereport(
-        LOG,
-        (errmsg(
-            "[HYU] ENQUEUE seg_id: %d, height: %d",
-            node->seg_id,
-            node->height)));
   }
 }
 
@@ -452,8 +446,9 @@ UnlinkNode(EbiTree ebitree, dsa_pointer dsa_node, EbiList delete_list) {
 
 static void
 UnlinkFromParent(EbiNode node) {
-  EbiNode parent;
+  EbiNode parent, curr;
   uint64 num_versions;
+  dsa_pointer proxy_target;
 
   parent = ConvertToEbiNode(ebitree_dsa_area, node->parent);
 
@@ -465,17 +460,17 @@ UnlinkFromParent(EbiNode node) {
 
   node->max_xid = EbiTreeGetMaxTransactionId();
 
-  ereport(
-      LOG,
-      (errmsg(
-          "[HYU] DEQUEUE seg_id: %d, max_xid: %d",
-          node->seg_id,
-          node->max_xid)));
+  curr = node;
+  while (curr != NULL) {
+    proxy_target = curr->proxy_target;
 
-  /* Version counter */
-  num_versions = pg_atomic_read_u64(&node->num_versions);
-  num_versions = num_versions - (num_versions % NUM_VERSIONS_PER_CHUNK);
-  pg_atomic_sub_fetch_u64(&EbiTreeShmem->num_versions, num_versions);
+    /* Version counter */
+    num_versions = pg_atomic_read_u64(&curr->num_versions);
+    num_versions = num_versions - (num_versions % NUM_VERSIONS_PER_CHUNK);
+    pg_atomic_sub_fetch_u64(&EbiTreeShmem->num_versions, num_versions);
+
+	curr = ConvertToEbiNode(ebitree_dsa_area, proxy_target);
+  }
 }
 
 static void
@@ -647,14 +642,14 @@ Sift(TransactionId vmin, TransactionId vmax) {
       if (!Overlaps(right, vmin, vmax)) {
         return NULL;
       } else {
-        curr = ConvertToEbiNode(ebitree_dsa_area, curr->right);
+        curr = right;
       }
     } else if (!right_exists) {
       // Only the right is null and the version does not fit into the left
       if (!Overlaps(left, vmin, vmax)) {
         return NULL;
       } else {
-        curr = ConvertToEbiNode(ebitree_dsa_area, curr->left);
+        curr = left;
       }
     } else {
       // Both are not null
@@ -665,9 +660,9 @@ Sift(TransactionId vmin, TransactionId vmax) {
         // Overlaps both child, current interval is where it fits
         break;
       } else if (left_includes) {
-        curr = ConvertToEbiNode(ebitree_dsa_area, curr->left);
+        curr = left;
       } else if (right_includes) {
-        curr = ConvertToEbiNode(ebitree_dsa_area, curr->right);
+        curr = right;
       } else {
         return NULL;
       }
@@ -688,10 +683,10 @@ Overlaps(EbiNode node, TransactionId vmin, TransactionId vmax) {
   Assert(left_snap != NULL);
 
   if (right_snap != NULL)
-    return XidInMVCCSnapshot(vmax, left_snap) &&
-           !XidInMVCCSnapshot(vmin, right_snap);
+    return XidInMVCCSnapshotForEBI(vmax, left_snap) &&
+           !XidInMVCCSnapshotForEBI(vmin, right_snap);
   else
-    return XidInMVCCSnapshot(vmax, left_snap);
+    return XidInMVCCSnapshotForEBI(vmax, left_snap);
 }
 
 EbiTreeVersionOffset
@@ -735,7 +730,7 @@ EbiTreeSiftAndBind(
   // Write version to segment
   EbiTreeAppendVersion(seg_id, seg_offset, tuple_size, tuple, rwlock);
 
-  num_versions = pg_atomic_fetch_add_u64(&node->num_versions, 1);
+  num_versions = pg_atomic_add_fetch_u64(&node->num_versions, 1);
 
   // Update global counter if necessary
   if (num_versions % NUM_VERSIONS_PER_CHUNK == 0) {

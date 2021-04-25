@@ -950,6 +950,9 @@ dsa_get_address(dsa_area *area, dsa_pointer dp)
 	if (unlikely(area->segment_maps[index].mapped_address == NULL))
 	{
 		/* Call for effect (we don't need the result). */
+#ifdef J3VM
+		ereport(LOG, (errmsg("@@@ get_segment_by_index, %d", index)));
+#endif
 		get_segment_by_index(area, index);
 	}
 

@@ -398,9 +398,9 @@ PLeafCompactVersions(bool is_break,
 			{
 				if (!lock_acquired) 
 				{
-					lock_acquired = true;
+					//lock_acquired = true;
 					/* Acquire latch in here */
-					LWLockAcquire(rwlock, LW_EXCLUSIVE);
+					//LWLockAcquire(rwlock, LW_EXCLUSIVE);
 				}
 
 				if (!is_direct) 
@@ -436,10 +436,10 @@ PLeafCompactVersions(bool is_break,
 	PLeafSetVersionIndexTail(version_index, new_version_tail);
 
 	/* Release latch in here */
-	if (lock_acquired) 
-	{
-		LWLockRelease(rwlock);
-	}
+	//if (lock_acquired) 
+	//{
+	//	LWLockRelease(rwlock);
+	//}
 	return ret_value;
 }
 
@@ -622,7 +622,7 @@ PLeafContractVersions(PLeafTempInfo temp_info,
 
 	PLeafMarkDirtyPage(new_frame_id);
 
-	LWLockAcquire(rwlock, LW_EXCLUSIVE);
+	//LWLockAcquire(rwlock, LW_EXCLUSIVE);
 
 	/* Change offset value after contraction based on current circumstance
 	 * If this version-array is directly connected to record,
@@ -658,7 +658,7 @@ PLeafContractVersions(PLeafTempInfo temp_info,
 		PLeafChangeUpperOffset(temp_info, index - 1, new_offset);
 	}
 
-	LWLockRelease(rwlock);
+	//LWLockRelease(rwlock);
 	PLeafReleaseFreeSlot(page, frame_id, free_pool, capacity, array_index);	
 
 	PLeafReleasePage(new_frame_id);
@@ -666,7 +666,7 @@ PLeafContractVersions(PLeafTempInfo temp_info,
 
 func_exit:
 
-	LWLockRelease(rwlock);
+	//LWLockRelease(rwlock);
 	PLeafReleaseFreeSlot(page, frame_id, free_pool, capacity, array_index);	
 	PLeafReleaseFreeSlot(new_page, new_frame_id, 
 					free_pool, new_capacity, new_array_index);
@@ -817,7 +817,7 @@ PLeafExpandVersions(PLeafTempInfo
 	if (!flag) 
 	{
 		/* Not maximum capacity */
-		LWLockAcquire(rwlock, LW_EXCLUSIVE);
+		//LWLockAcquire(rwlock, LW_EXCLUSIVE);
 
 		if (index == LAST_ARRAY_ACCESSED) 
 		{
@@ -830,7 +830,7 @@ PLeafExpandVersions(PLeafTempInfo
 			PLeafChangeUpperOffset(temp_info, index - 1, new_offset);
 		}
 
-		LWLockRelease(rwlock);
+		//LWLockRelease(rwlock);
 		
 		/* Release used slot in the previous page */
 		PLeafReleaseFreeSlot(page, frame_id, free_pool, capacity, array_index);
@@ -881,9 +881,9 @@ PLeafExpandVersions(PLeafTempInfo
 			PLeafMarkDirtyPage(new_frame_id);	
 			PLeafReleasePage(new_frame_id);
 
-			LWLockAcquire(rwlock, LW_EXCLUSIVE);
+			//LWLockAcquire(rwlock, LW_EXCLUSIVE);
 			*ret_offset = PLeafMakeOffset(free_pool->gen_no, new_ret_offset);
-			LWLockRelease(rwlock);
+			//LWLockRelease(rwlock);
 
 			return true;
 		} 

@@ -991,6 +991,13 @@ exec_simple_query(const char *query_string)
 	bool		use_implicit_block;
 	char		msec_str[32];
 
+#ifdef J3VM
+	if (strcmp(query_string, "ALTER TABLE CUSTOMER ADD CONSTRAINT CUSTOMER_I1 PRIMARY KEY (C_W_ID, C_D_ID, C_ID)") == 0)
+	{
+		sleep(5);
+	}
+#endif
+
 	/*
 	 * Report query to various monitoring facilities.
 	 */

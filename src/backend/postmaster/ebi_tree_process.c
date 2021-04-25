@@ -366,6 +366,7 @@ EbiTreeDsaDetach(void) {
 static void
 EbiTreeProcessInit(void) {
   delete_list = (EbiList)palloc(sizeof(struct EbiListData));
+  delete_list->head = NULL;
 }
 
 #endif

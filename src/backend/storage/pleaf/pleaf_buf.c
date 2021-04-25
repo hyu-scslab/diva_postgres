@@ -547,9 +547,17 @@ PLeafReadPage(const PLeafTag *tag,
 
 	PLeafOpenFile(pool_index);
 
-	assert(PLEAF_PAGE_SIZE == (read_size = pg_pread(pleaf_fd,
+	read_size = pg_pread(pleaf_fd,
 							&PLeafBlocks[frame_id * PLEAF_PAGE_SIZE],
-							PLEAF_PAGE_SIZE, tag->page_id * PLEAF_PAGE_SIZE)));
+							PLEAF_PAGE_SIZE, tag->page_id * PLEAF_PAGE_SIZE);
+	if (PLEAF_PAGE_SIZE != read_size)
+	{
+		sleep(20);
+	}
+	assert(PLEAF_PAGE_SIZE == read_size);
+	//assert(PLEAF_PAGE_SIZE == (read_size = pg_pread(pleaf_fd,
+	//						&PLeafBlocks[frame_id * PLEAF_PAGE_SIZE],
+	//						PLEAF_PAGE_SIZE, tag->page_id * PLEAF_PAGE_SIZE)));
 
 	PLeafCloseFile();
 }
@@ -1003,8 +1011,10 @@ PLeafStackPush(PLeafFreeStack free_stack,
 		if (PLeafStackTryPush(free_stack, page, page_id))
 			break;
 
+#if 0
 		if (ElimArrayVisit(&free_stack->elim_array, page_id) == EXCHANGER_INIT)
 			break;
+#endif
 	}
 }
 
@@ -1077,7 +1087,7 @@ PLeafStackPop(PLeafFreeStack free_stack,
 			/* Success to get a page */
 			return page;
 		}
-
+#if 0
 		ret_value = ElimArrayVisit(&free_stack->elim_array, EXCHANGER_INIT);
 
 		if (ret_value != EXCHANGER_FAIL && ret_value != EXCHANGER_INIT) {
@@ -1088,6 +1098,7 @@ PLeafStackPop(PLeafFreeStack free_stack,
 			page = PLeafGetPage(page_id, gen_no, false, frame_id);
 			return page;
 		}
+#endif
 	}
 
 	/* Fail to get a free page from stack, make new one */
@@ -1182,6 +1193,7 @@ PLeafMakeNewGeneration()
 
 	meta->generation_max_xid = PLeafGetMaxTransactionId();
 
+	ereport(LOG, (errmsg("@@ PLeafMakeNewGeneration, %u", new_gen_no)));
 }
 
 /*
@@ -1266,8 +1278,13 @@ PLeafNeedsNewGeneration(void)
 	pool_index = PLeafGetPoolIndex(gen_no);
   max_page_id = PLeafMetadata->pleafmeta.max_page_ids[pool_index];
 
+  if (max_page_id == 0)
+	  return false;
+
   fraction = ((double) num_versions) / (max_page_id * PLEAF_MAX_CAPACITY);
-  ret = (fraction < PLEAF_GENERATION_THRESHOLD);
+  ret = (fraction > PLEAF_GENERATION_THRESHOLD);
+
+  ereport(LOG, (errmsg("@@ PLeafNeedsNewGeneration, fraction: %lf, num_versions: %lu, max_page_id: %u", fraction, num_versions, max_page_id)));
 
   return ret;
 }

@@ -82,6 +82,14 @@ bool		IgnoreSystemIndexes = false;
  * ----------------------------------------------------------------
  */
 
+#ifdef J3VM
+void j3vm_segfault_handler(int sig)
+{
+	ereport(LOG, (errmsg("@@@@@ segfault")));
+	sleep(3600);
+}
+#endif /* J3VM */
+
 /*
  * Initialize the basic environment for a postmaster child
  *
@@ -91,6 +99,10 @@ void
 InitPostmasterChild(void)
 {
 	IsUnderPostmaster = true;	/* we are a postmaster subprocess now */
+
+#ifdef J3VM
+	signal(SIGSEGV, j3vm_segfault_handler);
+#endif /* J3VM */
 
 	/*
 	 * Set reference point for stack-depth checking. We re-do that even in the

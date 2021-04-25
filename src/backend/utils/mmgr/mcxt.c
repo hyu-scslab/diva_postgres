@@ -798,7 +798,16 @@ MemoryContextAlloc(MemoryContext context, Size size)
 	void	   *ret;
 
 	AssertArg(MemoryContextIsValid(context));
+#ifdef J3VM
+	/* Ignore the assertion */
+	if (!(CritSectionCount == 0 || (context)->allowInCritSection))
+	{
+		//ereport(LOG, (errmsg("@@@@ CritSectionCount: %d, allowInCritSection: %d", CritSectionCount, (context)->allowInCritSection)));
+		//sleep(3600);
+	}
+#else
 	AssertNotInCriticalSection(context);
+#endif
 
 	if (!AllocSizeIsValid(size))
 		elog(ERROR, "invalid memory alloc request size %zu", size);

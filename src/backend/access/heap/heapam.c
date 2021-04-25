@@ -487,6 +487,8 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 
 			if (valid)
 			{
+				if (scan->rs_vistuples_copied[ntup] != NULL)
+					heap_freetuple(scan->rs_vistuples_copied[ntup]);
 				scan->rs_vistuples_copied[ntup] = heap_copytuple(&loctup);
 
 				scan->rs_vistuples[ntup] = lineoff;
@@ -519,7 +521,7 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 			{
 				/*
 				 * If this scanning is for update, we don't need to bother
-				 * searching deeply
+				 * searching deeply.
 				 */
 				if (scan->rs_vistuples_copied[ntup] != NULL)
 					heap_freetuple(scan->rs_vistuples_copied[ntup]);
@@ -543,8 +545,10 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 			memcpy(&l_off, meta_tup, sizeof(uint64));
 			memcpy(&r_off, meta_tup + sizeof(uint64), sizeof(uint64));
 			memcpy(&xid_bound, meta_tup + sizeof(uint64) * 2, sizeof(TransactionId));
+			if (l_off == 0 && r_off == 0) {
+				ret_id = -1;
 
-			if (PLeafIsLeftLookup(l_off, r_off, xid_bound, snapshot))
+			} else if (PLeafIsLeftLookup(l_off, r_off, xid_bound, snapshot))
 			{
 				ret_id = PLeafLookupTuple(l_off, snapshot, 
 												loctup.t_len, (void**) &(loctup.t_data));
@@ -555,7 +559,6 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 												loctup.t_len, (void**) &(loctup.t_data));
 			}
 
-			Assert(ret_id != -1);
 
 			if (ret_id != -1)
 			{
@@ -568,7 +571,7 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 				scan->rs_vistuples_copied[ntup] = heap_copytuple(&loctup);
 				
 				// Unref(ret_id) in EBI-page
-        EbiTreeBufUnref(ret_id);
+				EbiTreeBufUnref(ret_id);
 
 				scan->rs_vistuples[ntup] = lineoff;
 				ntup++;
@@ -1881,11 +1884,13 @@ heap_hot_search_buffer_with_vc(ItemPointer tid, Relation relation,
 	 * Two versions in the heap page is invisible for the transaction,
 	 * so now it's time to lookup the version cluster.
 	 */
+#if 0
 	if (relation->rd_indexattr == NULL)
 	{
 		elog(WARNING, "@@ relation->rd_indexattr == NULL");
 		return false;
 	}
+#endif
 
 	if (is_left)
 		meta_tup = PageGetItem((Page) dp, PageGetItemId(dp, offnum + 1));
@@ -1896,7 +1901,11 @@ heap_hot_search_buffer_with_vc(ItemPointer tid, Relation relation,
 	memcpy(&r_off, meta_tup + sizeof(uint64), sizeof(uint64));
 	memcpy(&xid_bound, meta_tup + sizeof(uint64) * 2, sizeof(TransactionId));
 
-	if (PLeafIsLeftLookup(l_off, r_off, xid_bound, snapshot))
+	if (l_off == 0 && r_off == 0)
+	{
+		ret_id = -1;
+	}
+	else if (PLeafIsLeftLookup(l_off, r_off, xid_bound, snapshot))
 	{
 		ret_id = PLeafLookupTuple(l_off, snapshot, 
 										heapTuple->t_len, (void**) &(heapTuple->t_data));
@@ -1906,8 +1915,6 @@ heap_hot_search_buffer_with_vc(ItemPointer tid, Relation relation,
 		ret_id = PLeafLookupTuple(r_off, snapshot,
 										heapTuple->t_len, (void**) &(heapTuple->t_data));
 	}
-
-	Assert(ret_id != -1);
 
 	if (ret_id != -1)
 	{
@@ -1920,7 +1927,7 @@ heap_hot_search_buffer_with_vc(ItemPointer tid, Relation relation,
 		*copied_tuple = heap_copytuple(heapTuple);
 
 		// Unref(ret_id) in EBI-page
-    EbiTreeBufUnref(ret_id);
+		EbiTreeBufUnref(ret_id);
 
 		if (all_dead)
 			*all_dead = false;
@@ -4245,9 +4252,9 @@ l2:
 				result == TM_Updated ||
 				result == TM_Deleted ||
 				result == TM_BeingModified);
-		Assert(!(oldtup.t_data->t_infomask & HEAP_XMAX_INVALID));
-		Assert(result != TM_Updated ||
-				!ItemPointerEquals(&oldtup.t_self, &oldtup.t_data->t_ctid));
+//		Assert(!(oldtup.t_data->t_infomask & HEAP_XMAX_INVALID));
+//		Assert(result != TM_Updated ||
+//				!ItemPointerEquals(&oldtup.t_self, &oldtup.t_data->t_ctid));
 		tmfd->ctid = oldtup.t_data->t_ctid;
 		tmfd->xmax = HeapTupleHeaderGetUpdateXid(oldtup.t_data);
 		if (result == TM_SelfModified)
@@ -4530,7 +4537,7 @@ l2:
 		 * In PLeafAppendTuple, we only acquire this latch(buffer) in specific
 		 * cases.
 		 */
-		LockBuffer(buffer, BUFFER_LOCK_UNLOCK);
+//		LockBuffer(buffer, BUFFER_LOCK_UNLOCK);
 		/* Get lwlock pointer of buffer */
 		lwlock = (LWLock*) GetBufferLock(buffer);
 
@@ -4546,7 +4553,7 @@ l2:
 		}
 
 		// ret_value 
-		LockBuffer(buffer, BUFFER_LOCK_EXCLUSIVE);
+//		LockBuffer(buffer, BUFFER_LOCK_EXCLUSIVE);
 	}
 
 	/*

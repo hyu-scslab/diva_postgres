@@ -116,6 +116,10 @@ PLeafPageUnsetBitmap(PLeafPage page, int array_index)
 	PLeafBitmap* bitmap = PLeafPageGetBitmap(page);
 	PLeafBitmap ret_bitmap;
 
+	if ((*bitmap & ((uint64_t)(1) << array_index)) != 0)
+	{
+		sleep(20);
+	}
 	assert((*bitmap & ((uint64_t)(1) << array_index)) == 0);
 
 	ret_bitmap = __sync_fetch_and_or(bitmap, ((uint64_t)(1) << array_index));

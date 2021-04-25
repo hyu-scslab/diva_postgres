@@ -149,7 +149,7 @@ int		NPLeafInstances = 4;
 /* NPLeafInitPages is the number of pages per instance in initialization */
 int NPLeafInitPages = PLEAF_INIT_PAGES;
 #else
-int NPLeafInitPages = 100;
+int NPLeafInitPages = 0;
 #endif /* PLEAF_INIT_PAGES */
 
 #ifdef EBI_NUM_PAGE

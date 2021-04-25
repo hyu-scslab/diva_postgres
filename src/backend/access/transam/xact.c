@@ -2054,6 +2054,8 @@ CommitTransaction(void)
 	TransactionState s = CurrentTransactionState;
 	TransactionId latestXid;
 	bool		is_parallel_worker;
+	
+	//ereport(LOG, (errmsg("@@ CommitTransaction (xid: %d)", GetCurrentTransactionId())));
 
 	is_parallel_worker = (s->blockState == TBLOCK_PARALLEL_INPROGRESS);
 
@@ -2597,6 +2599,8 @@ AbortTransaction(void)
 	TransactionState s = CurrentTransactionState;
 	TransactionId latestXid;
 	bool		is_parallel_worker;
+
+	//ereport(LOG, (errmsg("@@ AbortTransaction (xid: %d)", GetCurrentTransactionId())));
 
 	/* Prevent cancel/die interrupt while cleaning up */
 	HOLD_INTERRUPTS();

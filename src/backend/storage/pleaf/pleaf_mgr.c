@@ -46,7 +46,7 @@
 
 #include "storage/pleaf_mgr.h"
 
-int PLeafManagerDelay = 100; /* milli-seconds */
+int PLeafManagerDelay = 1000; /* milli-seconds */
 int PLeafGenerationDelay = 10; /* seconds */
 
 void

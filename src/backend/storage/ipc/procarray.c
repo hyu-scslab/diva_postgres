@@ -1720,6 +1720,22 @@ GetSnapshotData(Snapshot snapshot)
 		MyPgXact->xmin = TransactionXmin = xmin;
 
 #ifdef J3VM
+	snapshot->xmin = xmin;
+	snapshot->xmax = xmax;
+	snapshot->xcnt = count;
+	snapshot->subxcnt = subcount;
+	snapshot->suboverflowed = suboverflowed;
+
+	snapshot->curcid = GetCurrentCommandId(false);
+
+	/*
+	 * This is a new snapshot, so set both refcounts are zero, and mark it as
+	 * not copied in persistent memory.
+	 */
+	snapshot->active_count = 0;
+	snapshot->regd_count = 0;
+	snapshot->copied = false;
+
 	/* Bind transaction */
 	if (!FirstSnapshotSet && is_txn)
 		BindTransaction(snapshot);
@@ -1762,6 +1778,7 @@ GetSnapshotData(Snapshot snapshot)
 
 	RecentXmin = xmin;
 
+#ifndef J3VM
 	snapshot->xmin = xmin;
 	snapshot->xmax = xmax;
 	snapshot->xcnt = count;
@@ -1777,6 +1794,7 @@ GetSnapshotData(Snapshot snapshot)
 	snapshot->active_count = 0;
 	snapshot->regd_count = 0;
 	snapshot->copied = false;
+#endif
 
 	if (old_snapshot_threshold < 0)
 	{
@@ -2293,6 +2311,9 @@ PLeafGetOldestActiveTransactionId(void)
 		/* Fetch xid just once - see GetNewTransactionId */
 		xid = UINT32_ACCESS_ONCE(pgxact->xid);
 		if (!TransactionIdIsNormal(xid))
+			continue;
+
+		if (xid == 0)
 			continue;
 
 		if (TransactionIdPrecedes(xid, oldestRunningXid))

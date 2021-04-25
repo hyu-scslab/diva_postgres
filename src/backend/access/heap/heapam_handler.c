@@ -2412,7 +2412,11 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 				memcpy(&r_off, meta_tup + sizeof(uint64), sizeof(uint64));
 				memcpy(&xid_bound, meta_tup + sizeof(uint64) * 2, sizeof(TransactionId));
 
-				if (PLeafIsLeftLookup(l_off, r_off, xid_bound, snapshot))
+				if (l_off == 0 && r_off == 0)
+				{
+					ret_id = -1;
+				}
+				else if (PLeafIsLeftLookup(l_off, r_off, xid_bound, snapshot))
 				{
 					ret_id = PLeafLookupTuple(l_off, snapshot, 
 													loctup.t_len, (void**) &(loctup.t_data));
@@ -2423,8 +2427,6 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 													loctup.t_len, (void**) &(loctup.t_data));
 				}
 			
-				Assert(ret_id != -1);
-
 				if (ret_id != -1)
 				{
 					loctup.t_tableOid = OID_MAX;

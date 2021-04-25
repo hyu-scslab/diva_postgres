@@ -336,6 +336,8 @@ DsaCopySnapshot(Snapshot snapshot) {
   Snapshot newsnap;
   Size subxipoff;
   Size size;
+  TransactionId	*snapxip;
+  TransactionId	*snapsubxip;
 
   Assert(snapshot != InvalidSnapshot);
 
@@ -352,9 +354,16 @@ DsaCopySnapshot(Snapshot snapshot) {
   newsnap->active_count = 0;
   newsnap->copied = true;
 
+  /*
+   * Calculate the offset of snapshot->xip, snapshot->subxip,
+   * since those values are virtual addresses of the snapshot owner
+   */
+  snapxip = (TransactionId *) (snapshot + 1);
+  snapsubxip = (TransactionId *) ((char *) snapshot + subxipoff);
+
   if (snapshot->xcnt > 0) {
     newsnap->xip = (TransactionId*)(newsnap + 1);
-    memcpy(newsnap->xip, snapshot->xip, snapshot->xcnt * sizeof(TransactionId));
+    memcpy(newsnap->xip, snapxip, snapshot->xcnt * sizeof(TransactionId));
   } else
     newsnap->xip = NULL;
 
@@ -363,7 +372,7 @@ DsaCopySnapshot(Snapshot snapshot) {
     newsnap->subxip = (TransactionId*)((char*)newsnap + subxipoff);
     memcpy(
         newsnap->subxip,
-        snapshot->subxip,
+        snapxip,
         snapshot->subxcnt * sizeof(TransactionId));
   } else
     newsnap->subxip = NULL;

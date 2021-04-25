@@ -2384,7 +2384,11 @@ XidInMVCCSnapshotForEBI(TransactionId xid, Snapshot snapshot)
 	TransactionId	*xip;
 	TransactionId	*subxip;
 	Size			subxipoff;
-
+	
+	/*
+	 * Calculate the offset of snapshot->xip, snapshot->subxip,
+     * since those values are virtual addresses of the snapshot owner
+	 */
 	xip = (TransactionId *) (snapshot + 1);
 	subxipoff = sizeof(SnapshotData) + snapshot->xcnt * sizeof(TransactionId);
 	subxip = (TransactionId *) ((char *) snapshot + subxipoff);

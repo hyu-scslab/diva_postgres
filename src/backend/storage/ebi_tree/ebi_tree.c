@@ -372,7 +372,7 @@ DsaCopySnapshot(Snapshot snapshot) {
     newsnap->subxip = (TransactionId*)((char*)newsnap + subxipoff);
     memcpy(
         newsnap->subxip,
-        snapxip,
+        snapsubxip,
         snapshot->subxcnt * sizeof(TransactionId));
   } else
     newsnap->subxip = NULL;

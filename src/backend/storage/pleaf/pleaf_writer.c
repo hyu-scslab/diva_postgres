@@ -302,7 +302,8 @@ PLeafReleaseAllFreeSlots(PLeafVersion version,
 					first_version, version_head % PLEAF_MAX_CAPACITY), free_pool);
 		version_head = (version_head + 1) % (2 * PLEAF_MAX_CAPACITY);
 	}
-
+	PLeafReleaseFreeSlot(page, frame_id, free_pool,
+							PLEAF_MAX_CAPACITY, array_index);
 	PLeafReleasePage(frame_id);
 	return;
 }

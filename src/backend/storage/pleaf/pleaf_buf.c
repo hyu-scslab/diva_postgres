@@ -733,6 +733,7 @@ PLeafFindFreeSlot(PLeafPage page,
 	/* Initialization */
 	*version_index = type;
 
+	PLeafMarkDirtyPage(frame_id);
 	if (!is_full) {
 		/* If a page has free space, then push it to stack */
 		free_stack = PLeafGetFreeStack(free_pool,
@@ -768,10 +769,12 @@ PLeafReleaseFreeSlot(PLeafPage page,
 	assert(array_index >= 0);
 	version_index = PLeafPageGetVersionIndex(page, array_index);
 	
+
 	*version_index = 0;
 
 	was_full = PLeafPageUnsetBitmap(page, array_index);
 	
+	PLeafMarkDirtyPage(frame_id);
 	if (was_full) {
 		free_stack = PLeafGetFreeStack(free_pool,
 				PLeafPageGetCapacityIndex(page), PLeafPageGetInstNo(page));
@@ -1109,9 +1112,11 @@ PLeafStackPop(PLeafFreeStack free_stack,
 	page_id = __sync_fetch_and_add(
 									&PLeafMetadata->pleafmeta.max_page_ids[pool_index], 1);
 	page = PLeafGetPage(page_id, gen_no, true, frame_id);
-
+	
 	PLeafPageSetCapAndInstNo(page, cap_index, inst_no);
 	PLeafPageInitBitmap(page, cap_index);
+
+	PLeafMarkDirtyPage(*frame_id);
 
 	return page;
 }

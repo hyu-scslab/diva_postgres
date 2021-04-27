@@ -28,10 +28,11 @@
 
 typedef struct {
   EbiTreeBufTag key; /* Tag of a disk page */
-  int id;         /* Associated buffer id */
+  int id;            /* Associated buffer id */
 } EbiTreeLookupEnt;
 
-StaticAssertDecl(sizeof(EbiTreeLookupEnt) == (sizeof(EbiTreeBufTag) + sizeof(int)),
+StaticAssertDecl(
+    sizeof(EbiTreeLookupEnt) == (sizeof(EbiTreeBufTag) + sizeof(int)),
     "EbiTree Lookup Entry");
 
 static HTAB *SharedEbiTreeHash;
@@ -41,7 +42,8 @@ static HTAB *SharedEbiTreeHash;
  *
  * compute the size of shared memory for ebi_tree hash
  */
-Size EbiTreeHashShmemSize(int size) {
+Size
+EbiTreeHashShmemSize(int size) {
   return hash_estimate_size(size, sizeof(EbiTreeLookupEnt));
 }
 
@@ -50,7 +52,8 @@ Size EbiTreeHashShmemSize(int size) {
  *
  * Initialize ebi_tree hash in shared memory
  */
-void EbiTreeHashInit(int size) {
+void
+EbiTreeHashInit(int size) {
   HASHCTL info;
   long num_partitions;
 
@@ -62,9 +65,12 @@ void EbiTreeHashInit(int size) {
   info.entrysize = sizeof(EbiTreeLookupEnt);
   info.num_partitions = num_partitions;
 
-  SharedEbiTreeHash =
-    ShmemInitHash("Shared EbiTree Lookup Table", size, size, &info,
-        HASH_ELEM | HASH_BLOBS | HASH_PARTITION);
+  SharedEbiTreeHash = ShmemInitHash(
+      "Shared EbiTree Lookup Table",
+      size,
+      size,
+      &info,
+      HASH_ELEM | HASH_BLOBS | HASH_PARTITION);
 }
 
 /*
@@ -76,7 +82,8 @@ void EbiTreeHashInit(int size) {
  * order to determine which buffer partition to lock, and we don't want to
  * do the hash computation twice (hash_any is a bit slow).
  */
-uint32 EbiTreeHashCode(const EbiTreeBufTag *tagPtr) {
+uint32
+EbiTreeHashCode(const EbiTreeBufTag *tagPtr) {
   return get_hash_value(SharedEbiTreeHash, (void *)tagPtr);
 }
 
@@ -87,7 +94,8 @@ uint32 EbiTreeHashCode(const EbiTreeBufTag *tagPtr) {
  * Caller must hold at least shared lock on EbiTreeMappingLock for tag's
  * partition
  */
-int EbiTreeHashLookup(const EbiTreeBufTag *tagPtr, uint32 hashcode) {
+int
+EbiTreeHashLookup(const EbiTreeBufTag *tagPtr, uint32 hashcode) {
   EbiTreeLookupEnt *result;
 
   result = (EbiTreeLookupEnt *)hash_search_with_hash_value(
@@ -109,8 +117,8 @@ int EbiTreeHashLookup(const EbiTreeBufTag *tagPtr, uint32 hashcode) {
  *
  * Caller must hold exclusive lock on EbiTreeMappingLock for tag's partition
  */
-int EbiTreeHashInsert(const EbiTreeBufTag *tagPtr, uint32 hashcode,
-    int buffer_id) {
+int
+EbiTreeHashInsert(const EbiTreeBufTag *tagPtr, uint32 hashcode, int buffer_id) {
   EbiTreeLookupEnt *result;
   bool found;
 
@@ -133,7 +141,8 @@ int EbiTreeHashInsert(const EbiTreeBufTag *tagPtr, uint32 hashcode,
  *
  * Caller must hold exclusive lock on EbiTreeMappingLock for tag's partition
  */
-void EbiTreeHashDelete(const EbiTreeBufTag *tagPtr, uint32 hashcode) {
+void
+EbiTreeHashDelete(const EbiTreeBufTag *tagPtr, uint32 hashcode) {
   EbiTreeLookupEnt *result;
 
   result = (EbiTreeLookupEnt *)hash_search_with_hash_value(

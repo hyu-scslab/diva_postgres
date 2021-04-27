@@ -54,7 +54,6 @@ PLeafManagerMain(void)
 {
 	sigjmp_buf	local_sigjmp_buf;
 	MemoryContext pleafmanager_context;
-	struct timespec base, now;
 
 	/*
 	 * Properly accept or ignore signals the postmaster might send us
@@ -164,7 +163,6 @@ PLeafManagerMain(void)
 	 */
 	ProcGlobal->pleafmanagerLatch = &MyProc->procLatch;
 
-	PLeafGetCurrentTime(&base);
 	/*
 	 * Loop forever
 	 */
@@ -182,13 +180,11 @@ PLeafManagerMain(void)
 		/* Do work... */
 		PLeafCleanOldGeneration();
 
-		PLeafGetCurrentTime(&now);
 		if (PLeafNeedsNewGeneration())
 		{
       // TODO: check point for generation change
       /* Create new generation */
 			PLeafMakeNewGeneration();
-			base = now;
 		}
 
 		(void) WaitLatch(MyLatch,

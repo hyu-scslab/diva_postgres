@@ -1013,14 +1013,12 @@ PLeafAppendVersionSlow(PLeafTempInfo temp_info,
  *
  * Append new version index to p-leaf version array.
  */
-int
+void
 PLeafAppendVersion(PLeafOffset offset,
 						PLeafOffset* ret_offset,
 						TransactionId xmin,
 						TransactionId xmax,
 						PLeafVersionOffset version_offset,
-						Size tuple_size,
-						const void* tuple,
 						LWLock* rwlock) 
 {
 	PLeafPage page;
@@ -1168,8 +1166,7 @@ PLeafAppendVersion(PLeafOffset offset,
 							&current_version_offset, ret_offset, rwlock);
 				break;
 			default:
-				return PLEAF_APPEND_ERROR;
-				break;
+        return;
 		}
 
 		if (stop)
@@ -1184,7 +1181,5 @@ PLeafAppendVersion(PLeafOffset offset,
 	{
 		PLeafReleasePage(temp_info[i].frame_id);
 	}
-
-	return PLEAF_APPEND_SUCCESS;
 }
 #endif

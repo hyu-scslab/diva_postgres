@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * ebi_tree_utils.h
- *    Includes multiple data structures such as,
+ *    Includes multiple data structures for EBI-tree such as,
  *      - Multiple Producer Single Consumer Queue (MPSC queue)
  *	    - Linked List
  *
@@ -16,56 +16,32 @@
 #define EBI_TREE_UTILS_H
 
 #include "c.h"
+#include "storage/ebi_tree.h"
 #include "utils/dsa.h"
 
 /*
- * MPSC Queue
+ * MPSC Queue (used for logical deletion of EBI nodes)
  */
 
-typedef struct TaskNodeStruct {
-  dsa_pointer dsa_node; /* EbiNode */
-  pg_atomic_uint32 next;
-} TaskNodeStruct;
-
-typedef struct TaskNodeStruct* TaskNode;
-
-typedef struct TaskQueueStruct {
-  dsa_pointer head; /* TaskNode */
-  dsa_pointer tail; /* TaskNode */
-} TaskQueueStruct;
-
-typedef struct TaskQueueStruct* TaskQueue;
-
-extern dsa_pointer InitQueue(dsa_area* area);
-extern void DeleteQueue(dsa_area* area, dsa_pointer dsa_queue);
-extern bool QueueIsEmpty(dsa_area* area, dsa_pointer dsa_queue);
+extern dsa_pointer EbiInitMpscQueue(dsa_area* area);
+extern void EbiDeleteMpscQueue(dsa_area* area, dsa_pointer dsa_queue);
+extern bool EbiMpscQueueIsEmpty(dsa_area* area, dsa_pointer dsa_queue);
 extern void
-Enqueue(dsa_area* area, dsa_pointer dsa_queue, dsa_pointer dsa_node);
-extern dsa_pointer Dequeue(dsa_area* area, dsa_pointer dsa_queue);
-extern void PrintQueue(dsa_area* area, dsa_pointer dsa_queue);
-
-typedef struct EbiTreeLinkedListStruct* EbiTreeLinkedList;
+EbiMpscEnqueue(dsa_area* area, dsa_pointer dsa_queue, dsa_pointer dsa_node);
+extern dsa_pointer EbiMpscDequeue(dsa_area* area, dsa_pointer dsa_queue);
+extern void EbiPrintMpscQueue(dsa_area* area, dsa_pointer dsa_queue);
 
 /*
- * Linked List
+ * SPSC Queue (used for physical deletion of EBI nodes)
  */
 
-typedef struct EbiListElementData {
-  dsa_pointer dsa_node; /* EbiNode */
-  struct EbiListElementData* next;
-} EbiListElementData;
-
-typedef struct EbiListElementData* EbiListElement;
-
-typedef struct EbiListData {
-  EbiListElement head;
-} EbiListData;
-
-typedef struct EbiListData* EbiList;
-
-extern void EbiListInsert(dsa_area* area, EbiList list, dsa_pointer dsa_node);
-extern bool EbiListIsEmpty(EbiList list);
-extern void EbiListDestroy(dsa_area* area, EbiList list);
-extern void EbiListPrint(dsa_area* area, EbiList list);
+extern EbiSpscQueue EbiInitSpscQueue(void);
+extern void EbiDeleteSpscQueue(EbiSpscQueue queue);
+extern bool EbiSpscQueueIsEmpty(EbiSpscQueue queue);
+extern void
+EbiSpscEnqueue(EbiSpscQueue queue, EbiNode node, dsa_pointer dsa_ptr);
+extern EbiNode EbiSpscDequeue(EbiSpscQueue queue);
+extern EbiNode EbiSpscQueueFront(EbiSpscQueue queue);
+extern dsa_pointer EbiSpscQueueFrontDsaPointer(EbiSpscQueue queue);
 
 #endif /* EBI_TREE_UTILS_H */

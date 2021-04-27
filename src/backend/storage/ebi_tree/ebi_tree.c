@@ -33,55 +33,59 @@ dsa_area* ebitree_dsa_area;
 /* Prototypes for private functions */
 
 /* Allocation */
-static dsa_pointer CreateNodeWithHeight(dsa_area* area, uint32 height);
-static dsa_pointer CreateNode(dsa_area* area);
+static dsa_pointer EbiCreateNodeWithHeight(dsa_area* area, uint32 height);
+static dsa_pointer EbiCreateNode(dsa_area* area);
 
 /* Insertion */
-static dsa_pointer FindInsertionTargetNode(EbiTree ebitree);
+static dsa_pointer EbiFindInsertionTargetNode(EbiTree ebitree);
 
 /* Deletion */
 static void
-UnlinkNode(EbiTree ebitree, dsa_pointer dsa_node, EbiList delete_list);
-static void UnlinkFromParent(EbiNode node);
-static void PushToGarbageQueue(EbiList delete_list, dsa_pointer dsa_node);
-static void CompactNode(EbiTree ebitree, dsa_pointer dsa_node);
-static void DeleteNode(EbiListElement element);
+EbiUnlinkNode(EbiTree ebitree, dsa_pointer dsa_node, EbiSpscQueue delete_queue);
+static void EbiUnlinkFromParent(EbiNode node);
+static void EbiPushToGarbageQueue(
+    EbiSpscQueue delete_queue,
+    EbiNode node,
+    dsa_pointer dsa_node);
+static void EbiCompactNode(EbiTree ebitree, dsa_pointer dsa_node);
+// static void EbiDeleteNode(EbiNode node, dsa_pointer dsa_ptr);
+static void EbiDeleteTreeRecursive(EbiNode node, dsa_pointer dsa_node);
 
-static void LinkProxy(dsa_pointer dsa_proxy, dsa_pointer dsa_proxy_target);
+static void EbiLinkProxy(dsa_pointer dsa_proxy, dsa_pointer dsa_proxy_target);
 
 /* Reference Counting */
-static uint32 IncreaseRefCount(EbiNode node);
-static uint32 DecreaseRefCount(EbiNode node);
+static uint32 EbiIncreaseRefCountInternal(EbiNode node);
+static uint32 EbiDecreaseRefCountInternal(EbiNode node);
 
-static void SetLeftBoundary(EbiNode node, Snapshot snapshot);
-static void SetRightBoundary(EbiNode node, Snapshot snapshot);
-static dsa_pointer SetRightBoundaryRecursive(
+static void EbiSetLeftBoundary(EbiNode node, Snapshot snapshot);
+static void EbiSetRightBoundary(EbiNode node, Snapshot snapshot);
+static dsa_pointer EbiSetRightBoundaryRecursive(
     dsa_pointer dsa_node,
     Snapshot snapshot);
 
 /* DSA based version of CopySnapshot in snapmgr.c */
-static dsa_pointer DsaCopySnapshot(Snapshot snapshot);
+static dsa_pointer EbiDsaCopySnapshot(Snapshot snapshot);
 
 /* Utility */
-static bool HasParent(EbiNode node);
-static bool HasLeftChild(EbiNode node);
-static bool IsLeftChild(EbiNode node);
-static bool IsLeaf(EbiNode node);
+static bool EbiHasParent(EbiNode node);
+static bool EbiHasLeftChild(EbiNode node);
+static bool EbiIsLeftChild(EbiNode node);
+static bool EbiIsLeaf(EbiNode node);
 
-static dsa_pointer Sibling(EbiNode node);
+static dsa_pointer EbiSibling(EbiNode node);
 
-static bool Overlaps(EbiNode node, TransactionId vmin, TransactionId vmax);
+static bool EbiOverlaps(EbiNode node, TransactionId vmin, TransactionId vmax);
 
 dsa_pointer
-InitEbiTree(dsa_area* area) {
+EbiInitTree(dsa_area* area) {
   dsa_pointer dsa_ebitree, dsa_sentinel;
   EbiTree ebitree;
 
   dsa_ebitree =
       dsa_allocate_extended(area, sizeof(EbiTreeData), DSA_ALLOC_ZERO);
-  ebitree = ConvertToEbiTree(area, dsa_ebitree);
+  ebitree = EbiConvertToTree(area, dsa_ebitree);
 
-  dsa_sentinel = CreateNode(area);
+  dsa_sentinel = EbiCreateNode(area);
 
   ebitree->root = dsa_sentinel;
   ebitree->recent_node = dsa_sentinel;
@@ -89,19 +93,19 @@ InitEbiTree(dsa_area* area) {
   return dsa_ebitree;
 }
 
-dsa_pointer
-CreateNode(dsa_area* area) {
-  return CreateNodeWithHeight(area, 0);
+static dsa_pointer
+EbiCreateNode(dsa_area* area) {
+  return EbiCreateNodeWithHeight(area, 0);
 }
 
-dsa_pointer
-CreateNodeWithHeight(dsa_area* area, uint32 height) {
+static dsa_pointer
+EbiCreateNodeWithHeight(dsa_area* area, uint32 height) {
   dsa_pointer pointer;
   EbiNode node;
 
   /* Allocate memory in dsa */
   pointer = dsa_allocate_extended(area, sizeof(EbiNodeData), DSA_ALLOC_ZERO);
-  node = ConvertToEbiNode(area, pointer);
+  node = EbiConvertToNode(area, pointer);
 
   Assert(node != NULL);
 
@@ -117,7 +121,10 @@ CreateNodeWithHeight(dsa_area* area, uint32 height) {
 
   /* Initialize file segment */
   node->seg_id =
-      EbiTreeShmem->seg_id++;  // the dedicated thread, alone, creates nodes
+      ++EbiTreeShmem->seg_id;  // the dedicated thread, alone, creates nodes
+
+  Assert(node->seg_id != 0);
+
   EbiTreeCreateSegmentFile(node->seg_id);
   pg_atomic_init_u32(&node->seg_offset, 0);
 
@@ -128,33 +135,55 @@ CreateNodeWithHeight(dsa_area* area, uint32 height) {
 }
 
 void
-DeleteEbiTree(dsa_pointer dsa_ebitree) {
+EbiDeleteTree(dsa_pointer dsa_ebitree) {
+  EbiTree ebitree;
+  dsa_pointer dsa_root;
+  EbiNode root;
+
   if (!DsaPointerIsValid(dsa_ebitree)) {
     return;
   }
 
-  // Wait until all transactions leave
+  ebitree = EbiConvertToTree(ebitree_dsa_area, dsa_ebitree);
 
-  // Delete each node
+  dsa_root = ebitree->root;
+  root = EbiConvertToNode(ebitree_dsa_area, dsa_root);
+
+  /* Delete remaining nodes */
+  EbiDeleteTreeRecursive(root, dsa_root);
+
+  dsa_free(ebitree_dsa_area, dsa_ebitree);
+}
+
+static void
+EbiDeleteTreeRecursive(EbiNode node, dsa_pointer dsa_node) {
+  if (node == NULL) {
+    return;
+  }
+
+  EbiDeleteTreeRecursive(
+      EbiConvertToNode(ebitree_dsa_area, node->left), node->left);
+  EbiDeleteTreeRecursive(
+      EbiConvertToNode(ebitree_dsa_area, node->right), node->right);
+  EbiDeleteNode(node, dsa_node);
 }
 
 bool
-NeedsNewNode(dsa_pointer dsa_ebitree) {
+EbiNeedsNewNode(dsa_pointer dsa_ebitree) {
   EbiTree ebitree;
   EbiNode recent_node;
   bool ret;
 
-  ebitree = ConvertToEbiTree(ebitree_dsa_area, dsa_ebitree);
-  recent_node = ConvertToEbiNode(ebitree_dsa_area, ebitree->recent_node);
+  ebitree = EbiConvertToTree(ebitree_dsa_area, dsa_ebitree);
+  recent_node = EbiConvertToNode(ebitree_dsa_area, ebitree->recent_node);
 
-  // TODO: condition may change corresponding to the unit of epoch.
   ret = DsaPointerIsValid(recent_node->left_boundary);
 
   return ret;
 }
 
 void
-InsertNode(dsa_pointer dsa_ebitree) {
+EbiInsertNode(dsa_pointer dsa_ebitree) {
   EbiTree ebitree;
 
   dsa_pointer dsa_target;
@@ -166,7 +195,7 @@ InsertNode(dsa_pointer dsa_ebitree) {
   EbiNode new_leaf;
   Snapshot snap;
 
-  ebitree = ConvertToEbiTree(ebitree_dsa_area, dsa_ebitree);
+  ebitree = EbiConvertToTree(ebitree_dsa_area, dsa_ebitree);
 
   /*
    * Find the target ebi_node to perform insertion, make a new parent for the
@@ -177,18 +206,19 @@ InsertNode(dsa_pointer dsa_ebitree) {
    * target  new_leaf
    *
    */
-  dsa_target = FindInsertionTargetNode(ebitree);
-  target = ConvertToEbiNode(ebitree_dsa_area, dsa_target);
+  dsa_target = EbiFindInsertionTargetNode(ebitree);
+  target = EbiConvertToNode(ebitree_dsa_area, dsa_target);
 
-  dsa_new_parent = CreateNodeWithHeight(ebitree_dsa_area, target->height + 1);
-  new_parent = ConvertToEbiNode(ebitree_dsa_area, dsa_new_parent);
+  dsa_new_parent =
+      EbiCreateNodeWithHeight(ebitree_dsa_area, target->height + 1);
+  new_parent = EbiConvertToNode(ebitree_dsa_area, dsa_new_parent);
 
-  dsa_new_leaf = CreateNode(ebitree_dsa_area);
-  new_leaf = ConvertToEbiNode(ebitree_dsa_area, dsa_new_leaf);
+  dsa_new_leaf = EbiCreateNode(ebitree_dsa_area);
+  new_leaf = EbiConvertToNode(ebitree_dsa_area, dsa_new_leaf);
 
   // Set the left bound of the new parent to the left child's left bound.
   snap = (Snapshot)dsa_get_address(ebitree_dsa_area, target->left_boundary);
-  SetLeftBoundary(new_parent, snap);
+  EbiSetLeftBoundary(new_parent, snap);
 
   /*
    * Connect the original parent as the new parent's parent.
@@ -202,7 +232,7 @@ InsertNode(dsa_pointer dsa_ebitree) {
    * c   d   e           c  d e  g
    *
    */
-  if (HasParent(target)) {
+  if (EbiHasParent(target)) {
     new_parent->parent = target->parent;
   }
   // f->e, f->g
@@ -216,9 +246,9 @@ InsertNode(dsa_pointer dsa_ebitree) {
   pg_memory_barrier();
 
   // a->f
-  if (HasParent(target)) {
+  if (EbiHasParent(target)) {
     EbiNode tmp;
-    tmp = ConvertToEbiNode(ebitree_dsa_area, target->parent);
+    tmp = EbiConvertToNode(ebitree_dsa_area, target->parent);
     tmp->right = dsa_new_parent;
   }
   // e->f, g->f
@@ -226,7 +256,7 @@ InsertNode(dsa_pointer dsa_ebitree) {
   new_leaf->parent = dsa_new_parent;
 
   // If the target node is root, the root is changed to the new parent.
-  if (target == ConvertToEbiNode(ebitree_dsa_area, ebitree->root)) {
+  if (target == EbiConvertToNode(ebitree_dsa_area, ebitree->root)) {
     ebitree->root = dsa_new_parent;
   }
 
@@ -237,7 +267,7 @@ InsertNode(dsa_pointer dsa_ebitree) {
 }
 
 static dsa_pointer
-FindInsertionTargetNode(EbiTree ebitree) {
+EbiFindInsertionTargetNode(EbiTree ebitree) {
   dsa_pointer dsa_tmp;
   dsa_pointer dsa_parent;
 
@@ -247,23 +277,23 @@ FindInsertionTargetNode(EbiTree ebitree) {
   EbiNode right;
 
   dsa_tmp = ebitree->recent_node;
-  tmp = ConvertToEbiNode(ebitree_dsa_area, dsa_tmp);
+  tmp = EbiConvertToNode(ebitree_dsa_area, dsa_tmp);
 
   dsa_parent = tmp->parent;
-  parent = ConvertToEbiNode(ebitree_dsa_area, dsa_parent);
+  parent = EbiConvertToNode(ebitree_dsa_area, dsa_parent);
 
   while (parent != NULL) {
-    left = ConvertToEbiNode(ebitree_dsa_area, parent->left);
-    right = ConvertToEbiNode(ebitree_dsa_area, parent->right);
+    left = EbiConvertToNode(ebitree_dsa_area, parent->left);
+    right = EbiConvertToNode(ebitree_dsa_area, parent->right);
 
     if (left->height > right->height) {
       // Unbalanced, found target node.
       break;
     } else {
       dsa_tmp = dsa_parent;
-      tmp = ConvertToEbiNode(ebitree_dsa_area, dsa_tmp);
+      tmp = EbiConvertToNode(ebitree_dsa_area, dsa_tmp);
       dsa_parent = tmp->parent;
-      parent = ConvertToEbiNode(ebitree_dsa_area, dsa_parent);
+      parent = EbiConvertToNode(ebitree_dsa_area, dsa_parent);
     }
   }
 
@@ -282,27 +312,27 @@ EbiIncreaseRefCount(Snapshot snapshot) {
   EbiNode sibling;
   uint32 refcnt;
 
-  tree = ConvertToEbiTree(ebitree_dsa_area, EbiTreeShmem->ebitree);
+  tree = EbiConvertToTree(ebitree_dsa_area, EbiTreeShmem->ebitree);
   dsa_recent_node = tree->recent_node;
-  recent_node = ConvertToEbiNode(ebitree_dsa_area, dsa_recent_node);
+  recent_node = EbiConvertToNode(ebitree_dsa_area, dsa_recent_node);
 
-  refcnt = IncreaseRefCount(recent_node);
+  refcnt = EbiIncreaseRefCountInternal(recent_node);
 
   // The first one to enter the current node should set the boundary.
   if (refcnt == 1) {
     // The next epoch's opening transaction will decrease ref count twice.
-    refcnt = IncreaseRefCount(recent_node);
+    refcnt = EbiIncreaseRefCountInternal(recent_node);
 
-    dsa_sibling = Sibling(recent_node);
-    sibling = ConvertToEbiNode(ebitree_dsa_area, dsa_sibling);
+    dsa_sibling = EbiSibling(recent_node);
+    sibling = EbiConvertToNode(ebitree_dsa_area, dsa_sibling);
 
-    SetLeftBoundary(recent_node, snapshot);
+    EbiSetLeftBoundary(recent_node, snapshot);
 
     // When the initial root node stands alone, sibling could be NULL.
     if (sibling != NULL) {
-      SetRightBoundary(sibling, snapshot);
+      EbiSetRightBoundary(sibling, snapshot);
       pg_memory_barrier();
-      dsa_prev_node = SetRightBoundaryRecursive(dsa_sibling, snapshot);
+      dsa_prev_node = EbiSetRightBoundaryRecursive(dsa_sibling, snapshot);
 
       // May delete the last recent node if there's no presence of any xacts.
       EbiDecreaseRefCount(dsa_prev_node);
@@ -313,31 +343,31 @@ EbiIncreaseRefCount(Snapshot snapshot) {
 }
 
 static uint32
-IncreaseRefCount(EbiNode node) {
+EbiIncreaseRefCountInternal(EbiNode node) {
   uint32 ret;
   ret = pg_atomic_add_fetch_u32(&node->refcnt, 1);
   return ret;
 }
 
 static void
-SetLeftBoundary(EbiNode node, Snapshot snapshot) {
-  node->left_boundary = DsaCopySnapshot(snapshot);
+EbiSetLeftBoundary(EbiNode node, Snapshot snapshot) {
+  node->left_boundary = EbiDsaCopySnapshot(snapshot);
 }
 
 static void
-SetRightBoundary(EbiNode node, Snapshot snapshot) {
-  node->right_boundary = DsaCopySnapshot(snapshot);
+EbiSetRightBoundary(EbiNode node, Snapshot snapshot) {
+  node->right_boundary = EbiDsaCopySnapshot(snapshot);
 }
 
 /* DSA version of CopySnapshot in snapmgr.c */
 static dsa_pointer
-DsaCopySnapshot(Snapshot snapshot) {
+EbiDsaCopySnapshot(Snapshot snapshot) {
   dsa_pointer dsa_newsnap;
   Snapshot newsnap;
   Size subxipoff;
   Size size;
-  TransactionId	*snapxip;
-  TransactionId	*snapsubxip;
+  TransactionId* snapxip;
+  TransactionId* snapsubxip;
 
   Assert(snapshot != InvalidSnapshot);
 
@@ -358,8 +388,8 @@ DsaCopySnapshot(Snapshot snapshot) {
    * Calculate the offset of snapshot->xip, snapshot->subxip,
    * since those values are virtual addresses of the snapshot owner
    */
-  snapxip = (TransactionId *) (snapshot + 1);
-  snapsubxip = (TransactionId *) ((char *) snapshot + subxipoff);
+  snapxip = (TransactionId*)(snapshot + 1);
+  snapsubxip = (TransactionId*)((char*)snapshot + subxipoff);
 
   if (snapshot->xcnt > 0) {
     newsnap->xip = (TransactionId*)(newsnap + 1);
@@ -371,9 +401,7 @@ DsaCopySnapshot(Snapshot snapshot) {
       (!snapshot->suboverflowed || snapshot->takenDuringRecovery)) {
     newsnap->subxip = (TransactionId*)((char*)newsnap + subxipoff);
     memcpy(
-        newsnap->subxip,
-        snapsubxip,
-        snapshot->subxcnt * sizeof(TransactionId));
+        newsnap->subxip, snapsubxip, snapshot->subxcnt * sizeof(TransactionId));
   } else
     newsnap->subxip = NULL;
 
@@ -381,17 +409,17 @@ DsaCopySnapshot(Snapshot snapshot) {
 }
 
 static dsa_pointer
-SetRightBoundaryRecursive(dsa_pointer dsa_node, Snapshot snapshot) {
+EbiSetRightBoundaryRecursive(dsa_pointer dsa_node, Snapshot snapshot) {
   EbiNode tmp;
   dsa_pointer ret;
 
   ret = dsa_node;
-  tmp = ConvertToEbiNode(ebitree_dsa_area, ret);
+  tmp = EbiConvertToNode(ebitree_dsa_area, ret);
 
   while (DsaPointerIsValid(tmp->right)) {
     ret = tmp->right;
-    tmp = ConvertToEbiNode(ebitree_dsa_area, ret);
-    SetRightBoundary(tmp, snapshot);
+    tmp = EbiConvertToNode(ebitree_dsa_area, ret);
+    EbiSetRightBoundary(tmp, snapshot);
   }
 
   return ret;
@@ -402,66 +430,71 @@ EbiDecreaseRefCount(dsa_pointer dsa_node) {
   EbiNode node;
   uint32 refcnt;
 
-  node = ConvertToEbiNode(ebitree_dsa_area, dsa_node);
-  refcnt = DecreaseRefCount(node);
+  node = EbiConvertToNode(ebitree_dsa_area, dsa_node);
+  refcnt = EbiDecreaseRefCountInternal(node);
 
   if (refcnt == 0) {
-    Enqueue(ebitree_dsa_area, EbiTreeShmem->unlink_queue, dsa_node);
+    EbiMpscEnqueue(ebitree_dsa_area, EbiTreeShmem->unlink_queue, dsa_node);
   }
 }
 
 static uint32
-DecreaseRefCount(EbiNode node) {
+EbiDecreaseRefCountInternal(EbiNode node) {
   uint32 ret;
   ret = pg_atomic_sub_fetch_u32(&node->refcnt, 1);
   return ret;
 }
 
 void
-UnlinkNodes(
+EbiUnlinkNodes(
     dsa_pointer dsa_ebitree,
     dsa_pointer unlink_queue,
-    EbiList delete_list) {
+    EbiSpscQueue delete_queue) {
   dsa_pointer dsa_tmp;
   EbiTree ebitree;
 
-  ebitree = ConvertToEbiTree(ebitree_dsa_area, dsa_ebitree);
+  ebitree = EbiConvertToTree(ebitree_dsa_area, dsa_ebitree);
 
-  dsa_tmp = Dequeue(ebitree_dsa_area, unlink_queue);
+  dsa_tmp = EbiMpscDequeue(ebitree_dsa_area, unlink_queue);
 
   while (DsaPointerIsValid(dsa_tmp)) {
     // Logical deletion
-    UnlinkNode(ebitree, dsa_tmp, delete_list);
+    EbiUnlinkNode(ebitree, dsa_tmp, delete_queue);
 
-    dsa_tmp = Dequeue(ebitree_dsa_area, unlink_queue);
+    dsa_tmp = EbiMpscDequeue(ebitree_dsa_area, unlink_queue);
   }
 }
 
 static void
-UnlinkNode(EbiTree ebitree, dsa_pointer dsa_node, EbiList delete_list) {
+EbiUnlinkNode(
+    EbiTree ebitree,
+    dsa_pointer dsa_node,
+    EbiSpscQueue delete_queue) {
   EbiNode node;
 
-  node = ConvertToEbiNode(ebitree_dsa_area, dsa_node);
+  node = EbiConvertToNode(ebitree_dsa_area, dsa_node);
 
   // Logical deletion, takes it off from the EBI-tree
-  UnlinkFromParent(node);
+  EbiUnlinkFromParent(node);
 
   // Prepare it for physical deletion
-  PushToGarbageQueue(delete_list, dsa_node);
+  EbiPushToGarbageQueue(delete_queue, node, dsa_node);
 
   // Compaction
-  CompactNode(ebitree, node->parent);
+  EbiCompactNode(ebitree, node->parent);
 }
 
 static void
-UnlinkFromParent(EbiNode node) {
+EbiUnlinkFromParent(EbiNode node) {
   EbiNode parent, curr;
   uint64 num_versions;
   dsa_pointer proxy_target;
 
-  parent = ConvertToEbiNode(ebitree_dsa_area, node->parent);
+  parent = EbiConvertToNode(ebitree_dsa_area, node->parent);
 
-  if (IsLeftChild(node)) {
+  Assert(parent != NULL);
+
+  if (EbiIsLeftChild(node)) {
     parent->left = InvalidDsaPointer;
   } else {
     parent->right = InvalidDsaPointer;
@@ -469,71 +502,74 @@ UnlinkFromParent(EbiNode node) {
 
   node->max_xid = EbiTreeGetMaxTransactionId();
 
+  /* Version counter */
   curr = node;
   while (curr != NULL) {
     proxy_target = curr->proxy_target;
 
-    /* Version counter */
     num_versions = pg_atomic_read_u64(&curr->num_versions);
     num_versions = num_versions - (num_versions % NUM_VERSIONS_PER_CHUNK);
     pg_atomic_sub_fetch_u64(&EbiTreeShmem->num_versions, num_versions);
 
-	curr = ConvertToEbiNode(ebitree_dsa_area, proxy_target);
+    curr = EbiConvertToNode(ebitree_dsa_area, proxy_target);
   }
 }
 
 static void
-PushToGarbageQueue(EbiList delete_list, dsa_pointer dsa_node) {
-  EbiListInsert(ebitree_dsa_area, delete_list, dsa_node);
+EbiPushToGarbageQueue(
+    EbiSpscQueue delete_queue,
+    EbiNode node,
+    dsa_pointer dsa_node) {
+  EbiSpscEnqueue(delete_queue, node, dsa_node);
 }
 
 static void
-CompactNode(EbiTree ebitree, dsa_pointer dsa_node) {
+EbiCompactNode(EbiTree ebitree, dsa_pointer dsa_node) {
   EbiNode node, tmp;
   dsa_pointer proxy_target;
   uint32 original_height;
 
   proxy_target = dsa_node;
-  node = ConvertToEbiNode(ebitree_dsa_area, dsa_node);
+  node = EbiConvertToNode(ebitree_dsa_area, dsa_node);
 
-  if (HasParent(node) == false) {
+  if (EbiHasParent(node) == false) {
     // When the root's child is being compacted
     EbiNode root;
 
-    if (HasLeftChild(node)) {
-      LinkProxy(node->left, proxy_target);
+    if (EbiHasLeftChild(node)) {
+      EbiLinkProxy(node->left, proxy_target);
       ebitree->root = node->left;
     } else {
-      LinkProxy(node->right, proxy_target);
+      EbiLinkProxy(node->right, proxy_target);
       ebitree->root = node->right;
     }
-    root = ConvertToEbiNode(ebitree_dsa_area, ebitree->root);
+    root = EbiConvertToNode(ebitree_dsa_area, ebitree->root);
     root->parent = InvalidDsaPointer;
   } else {
     EbiNode parent;
     dsa_pointer tmp_ptr;
 
-    parent = ConvertToEbiNode(ebitree_dsa_area, node->parent);
+    parent = EbiConvertToNode(ebitree_dsa_area, node->parent);
 
     // Compact the one-and-only child and its parent
-    if (IsLeftChild(node)) {
-      if (HasLeftChild(node)) {
-        LinkProxy(node->left, proxy_target);
+    if (EbiIsLeftChild(node)) {
+      if (EbiHasLeftChild(node)) {
+        EbiLinkProxy(node->left, proxy_target);
         parent->left = node->left;
       } else {
-        LinkProxy(node->right, proxy_target);
+        EbiLinkProxy(node->right, proxy_target);
         parent->left = node->right;
       }
-      tmp = ConvertToEbiNode(ebitree_dsa_area, parent->left);
+      tmp = EbiConvertToNode(ebitree_dsa_area, parent->left);
     } else {
-      if (HasLeftChild(node)) {
-        LinkProxy(node->left, proxy_target);
+      if (EbiHasLeftChild(node)) {
+        EbiLinkProxy(node->left, proxy_target);
         parent->right = node->left;
       } else {
-        LinkProxy(node->right, proxy_target);
+        EbiLinkProxy(node->right, proxy_target);
         parent->right = node->right;
       }
-      tmp = ConvertToEbiNode(ebitree_dsa_area, parent->right);
+      tmp = EbiConvertToNode(ebitree_dsa_area, parent->right);
     }
     tmp->parent = node->parent;
 
@@ -542,9 +578,9 @@ CompactNode(EbiTree ebitree, dsa_pointer dsa_node) {
     while (DsaPointerIsValid(tmp_ptr)) {
       EbiNode curr, left, right;
 
-      curr = ConvertToEbiNode(ebitree_dsa_area, tmp_ptr);
-      left = ConvertToEbiNode(ebitree_dsa_area, curr->left);
-      right = ConvertToEbiNode(ebitree_dsa_area, curr->right);
+      curr = EbiConvertToNode(ebitree_dsa_area, tmp_ptr);
+      left = EbiConvertToNode(ebitree_dsa_area, curr->left);
+      right = EbiConvertToNode(ebitree_dsa_area, curr->right);
 
       original_height = curr->height;
 
@@ -560,13 +596,13 @@ CompactNode(EbiTree ebitree, dsa_pointer dsa_node) {
 }
 
 static void
-LinkProxy(dsa_pointer dsa_proxy, dsa_pointer dsa_proxy_target) {
+EbiLinkProxy(dsa_pointer dsa_proxy, dsa_pointer dsa_proxy_target) {
   EbiNode proxy, new_proxy_target;
 
-  proxy = ConvertToEbiNode(ebitree_dsa_area, dsa_proxy);
+  proxy = EbiConvertToNode(ebitree_dsa_area, dsa_proxy);
 
   if (DsaPointerIsValid(proxy->proxy_target)) {
-    new_proxy_target = ConvertToEbiNode(ebitree_dsa_area, dsa_proxy_target);
+    new_proxy_target = EbiConvertToNode(ebitree_dsa_area, dsa_proxy_target);
     new_proxy_target->proxy_target = proxy->proxy_target;
   }
 
@@ -574,60 +610,69 @@ LinkProxy(dsa_pointer dsa_proxy, dsa_pointer dsa_proxy_target) {
 }
 
 void
-DeleteNodes(EbiList delete_list) {
+EbiDeleteNodes(EbiSpscQueue delete_queue) {
   TransactionId oldest_active_xid;
-  EbiListElement curr, tmp;
-  EbiNode curr_node;
+  EbiNode front;
+  dsa_pointer dsa_ptr;
 
   oldest_active_xid = EbiTreeGetOldestActiveTransactionId();
 
-  curr = delete_list->head;
+  while (!EbiSpscQueueIsEmpty(delete_queue)) {
+    front = EbiSpscQueueFront(delete_queue);
+    dsa_ptr = EbiSpscQueueFrontDsaPointer(delete_queue);
 
-  while (curr != NULL) {
-    curr_node = ConvertToEbiNode(ebitree_dsa_area, curr->dsa_node);
-
-    if (curr_node->max_xid > oldest_active_xid) {
+    /*
+     * The insertion order ensures that the queue is sorted in ascending order
+     */
+    if (front->max_xid > oldest_active_xid) {
       break;
     }
 
-    tmp = curr->next;
-    DeleteNode(curr);
-    curr = tmp;
-  }
+    front = EbiSpscDequeue(delete_queue);
 
-  delete_list->head = curr;
+    EbiDeleteNode(front, dsa_ptr);
+  }
 }
 
-static void
-DeleteNode(EbiListElement element) {
-  dsa_pointer curr_dsa_node, tmp;
-  EbiNode curr_node;
+void
+EbiDeleteNode(EbiNode node, dsa_pointer dsa_ptr) {
+  EbiNode curr;
+  dsa_pointer dsa_curr, proxy_target;
 
-  curr_dsa_node = element->dsa_node;
+  curr = node;
+  dsa_curr = dsa_ptr;
 
-  while (DsaPointerIsValid(curr_dsa_node)) {
-    curr_node = ConvertToEbiNode(ebitree_dsa_area, curr_dsa_node);
+  while (curr != NULL) {
+    proxy_target = curr->proxy_target;
 
-    tmp = curr_node->proxy_target;
+    EbiTreeRemoveSegmentFile(curr->seg_id);
 
-    EbiTreeRemoveSegmentFile(curr_node->seg_id);
-    dsa_free(ebitree_dsa_area, curr_dsa_node);
+    /* Leftboundary could be unset when EbiDeleteTree is called on shutdown */
+    if (DsaPointerIsValid(curr->left_boundary)) {
+      dsa_free(ebitree_dsa_area, curr->left_boundary);
+    }
 
-    curr_dsa_node = tmp;
+    /* Right boundary could be unset in the case of internal nodes */
+    if (DsaPointerIsValid(curr->right_boundary)) {
+      dsa_free(ebitree_dsa_area, curr->right_boundary);
+    }
+
+    dsa_free(ebitree_dsa_area, dsa_curr);
+
+    curr = EbiConvertToNode(ebitree_dsa_area, proxy_target);
+    dsa_curr = proxy_target;
   }
-
-  pfree(element);
 }
 
 EbiNode
-Sift(TransactionId vmin, TransactionId vmax) {
+EbiSift(TransactionId vmin, TransactionId vmax) {
   EbiTree ebitree;
   EbiNode curr, left, right;
   bool left_includes, right_includes;
   bool left_exists, right_exists;
 
-  ebitree = ConvertToEbiTree(ebitree_dsa_area, EbiTreeShmem->ebitree);
-  curr = ConvertToEbiNode(ebitree_dsa_area, ebitree->root);
+  ebitree = EbiConvertToTree(ebitree_dsa_area, EbiTreeShmem->ebitree);
+  curr = EbiConvertToNode(ebitree_dsa_area, ebitree->root);
 
   Assert(curr != NULL);
 
@@ -635,11 +680,11 @@ Sift(TransactionId vmin, TransactionId vmax) {
   if (!DsaPointerIsValid(curr->left_boundary)) return NULL;
 
   /* The version is already dead, may be cleaned */
-  if (!Overlaps(curr, vmin, vmax)) return NULL;
+  if (!EbiOverlaps(curr, vmin, vmax)) return NULL;
 
-  while (!IsLeaf(curr)) {
-    left = ConvertToEbiNode(ebitree_dsa_area, curr->left);
-    right = ConvertToEbiNode(ebitree_dsa_area, curr->right);
+  while (!EbiIsLeaf(curr)) {
+    left = EbiConvertToNode(ebitree_dsa_area, curr->left);
+    right = EbiConvertToNode(ebitree_dsa_area, curr->right);
 
     left_exists = ((left != NULL) && DsaPointerIsValid(left->left_boundary));
     right_exists = ((right != NULL) && DsaPointerIsValid(right->left_boundary));
@@ -648,22 +693,22 @@ Sift(TransactionId vmin, TransactionId vmax) {
       return NULL;
     } else if (!left_exists) {
       // Only the left is null and the version does not fit into the right
-      if (!Overlaps(right, vmin, vmax)) {
+      if (!EbiOverlaps(right, vmin, vmax)) {
         return NULL;
       } else {
         curr = right;
       }
     } else if (!right_exists) {
       // Only the right is null and the version does not fit into the left
-      if (!Overlaps(left, vmin, vmax)) {
+      if (!EbiOverlaps(left, vmin, vmax)) {
         return NULL;
       } else {
         curr = left;
       }
     } else {
       // Both are not null
-      left_includes = Overlaps(left, vmin, vmax);
-      right_includes = Overlaps(right, vmin, vmax);
+      left_includes = EbiOverlaps(left, vmin, vmax);
+      right_includes = EbiOverlaps(right, vmin, vmax);
 
       if (left_includes && right_includes) {
         // Overlaps both child, current interval is where it fits
@@ -682,7 +727,7 @@ Sift(TransactionId vmin, TransactionId vmax) {
 }
 
 static bool
-Overlaps(EbiNode node, TransactionId vmin, TransactionId vmax) {
+EbiOverlaps(EbiNode node, TransactionId vmin, TransactionId vmax) {
   Snapshot left_snap, right_snap;
 
   left_snap = (Snapshot)dsa_get_address(ebitree_dsa_area, node->left_boundary);
@@ -699,7 +744,7 @@ Overlaps(EbiNode node, TransactionId vmin, TransactionId vmax) {
 }
 
 EbiTreeVersionOffset
-EbiTreeSiftAndBind(
+EbiSiftAndBind(
     TransactionId vmin,
     TransactionId vmax,
     Size tuple_size,
@@ -715,7 +760,7 @@ EbiTreeSiftAndBind(
 
   Assert(ebitree_dsa_area != NULL);
 
-  node = Sift(vmin, vmax);
+  node = EbiSift(vmin, vmax);
 
   if (node == NULL) {
     /* Reclaimable */
@@ -749,21 +794,11 @@ EbiTreeSiftAndBind(
 
   ret = EBI_TREE_SEG_TO_VERSION_OFFSET(seg_id, seg_offset);
 
-  /*
-  ereport(
-      LOG,
-      (errmsg(
-          "WRITING seg_id: %d, seg_offset: %d, ret: %lu",
-          seg_id,
-          seg_offset,
-          ret)));
-          */
-
   return ret;
 }
 
 int
-EbiTreeLookupVersion(
+EbiLookupVersion(
     EbiTreeVersionOffset version_offset,
     Size tuple_size,
     void** ret_value) {
@@ -773,16 +808,6 @@ EbiTreeLookupVersion(
 
   seg_id = EBI_TREE_VERSION_OFFSET_TO_SEG_ID(version_offset);
   seg_offset = EBI_TREE_VERSION_OFFSET_TO_SEG_OFFSET(version_offset);
-
-  /*
-  ereport(
-      LOG,
-      (errmsg(
-          "READING seg_id: %d, seg_offset: %d, ret: %lu",
-          seg_id,
-          seg_offset,
-          EBI_TREE_SEG_TO_VERSION_OFFSET(seg_id, seg_offset))));
-          */
 
   Assert(seg_id >= 1);
   Assert(seg_offset >= 0);
@@ -794,17 +819,17 @@ EbiTreeLookupVersion(
 }
 
 bool
-EbiTreeSegIsAlive(dsa_pointer dsa_ebitree, EbiTreeSegmentId seg_id) {
+EbiSegIsAlive(dsa_pointer dsa_ebitree, EbiTreeSegmentId seg_id) {
   EbiTree ebitree;
   dsa_pointer dsa_curr;
   EbiNode curr;
 
-  ebitree = ConvertToEbiTree(ebitree_dsa_area, dsa_ebitree);
+  ebitree = EbiConvertToTree(ebitree_dsa_area, dsa_ebitree);
 
   dsa_curr = ebitree->root;
-  curr = ConvertToEbiNode(ebitree_dsa_area, dsa_curr);
+  curr = EbiConvertToNode(ebitree_dsa_area, dsa_curr);
 
-  while (!IsLeaf(curr)) {
+  while (!EbiIsLeaf(curr)) {
     if (curr->seg_id == seg_id) {
       return true;
     }
@@ -820,13 +845,13 @@ EbiTreeSegIsAlive(dsa_pointer dsa_ebitree, EbiTreeSegmentId seg_id) {
       return false;
     }
 
-    curr = ConvertToEbiNode(ebitree_dsa_area, dsa_curr);
+    curr = EbiConvertToNode(ebitree_dsa_area, dsa_curr);
   }
 
-  Assert(IsLeaf(curr));
+  Assert(EbiIsLeaf(curr));
 
   while (DsaPointerIsValid(dsa_curr)) {
-    curr = ConvertToEbiNode(ebitree_dsa_area, dsa_curr);
+    curr = EbiConvertToNode(ebitree_dsa_area, dsa_curr);
 
     if (curr->seg_id == seg_id) {
       return true;
@@ -839,12 +864,12 @@ EbiTreeSegIsAlive(dsa_pointer dsa_ebitree, EbiTreeSegmentId seg_id) {
 }
 
 EbiTree
-ConvertToEbiTree(dsa_area* area, dsa_pointer ptr) {
+EbiConvertToTree(dsa_area* area, dsa_pointer ptr) {
   return (EbiTree)dsa_get_address(area, ptr);
 }
 
 EbiNode
-ConvertToEbiNode(dsa_area* area, dsa_pointer ptr) {
+EbiConvertToNode(dsa_area* area, dsa_pointer ptr) {
   return (EbiNode)dsa_get_address(area, ptr);
 }
 
@@ -853,31 +878,31 @@ ConvertToEbiNode(dsa_area* area, dsa_pointer ptr) {
  */
 
 static bool
-HasParent(EbiNode node) {
+EbiHasParent(EbiNode node) {
   return DsaPointerIsValid(node->parent);
 }
 
 static bool
-IsLeftChild(EbiNode node) {
-  EbiNode parent = ConvertToEbiNode(ebitree_dsa_area, node->parent);
-  return node == ConvertToEbiNode(ebitree_dsa_area, parent->left);
+EbiIsLeftChild(EbiNode node) {
+  EbiNode parent = EbiConvertToNode(ebitree_dsa_area, node->parent);
+  return node == EbiConvertToNode(ebitree_dsa_area, parent->left);
 }
 
 static bool
-HasLeftChild(EbiNode node) {
+EbiHasLeftChild(EbiNode node) {
   return DsaPointerIsValid(node->left);
 }
 
 static bool
-IsLeaf(EbiNode node) {
+EbiIsLeaf(EbiNode node) {
   return node->height == 0;
 }
 
 static dsa_pointer
-Sibling(EbiNode node) {
-  if (HasParent(node)) {
-    EbiNode parent = ConvertToEbiNode(ebitree_dsa_area, node->parent);
-    if (IsLeftChild(node)) {
+EbiSibling(EbiNode node) {
+  if (EbiHasParent(node)) {
+    EbiNode parent = EbiConvertToNode(ebitree_dsa_area, node->parent);
+    if (EbiIsLeftChild(node)) {
       return parent->right;
     } else {
       return parent->left;
@@ -888,30 +913,30 @@ Sibling(EbiNode node) {
 }
 
 void
-PrintEbiTree(dsa_pointer dsa_ebitree) {
+EbiPrintTree(dsa_pointer dsa_ebitree) {
   EbiTree ebitree;
   EbiNode root;
 
-  ebitree = ConvertToEbiTree(ebitree_dsa_area, dsa_ebitree);
-  root = ConvertToEbiNode(ebitree_dsa_area, ebitree->root);
+  ebitree = EbiConvertToTree(ebitree_dsa_area, dsa_ebitree);
+  root = EbiConvertToNode(ebitree_dsa_area, ebitree->root);
 
   ereport(LOG, (errmsg("Print Tree (%d)", root->height)));
-  PrintEbiTreeRecursive(root);
+  EbiPrintTreeRecursive(root);
 }
 
 void
-PrintEbiTreeRecursive(EbiNode node) {
+EbiPrintTreeRecursive(EbiNode node) {
   if (node == NULL) {
     return;
   }
-  PrintEbiTreeRecursive(ConvertToEbiNode(ebitree_dsa_area, node->left));
+  EbiPrintTreeRecursive(EbiConvertToNode(ebitree_dsa_area, node->left));
   ereport(
       LOG,
       (errmsg(
           "[HYU] seg_id: %d, offset: %d",
           node->seg_id,
           pg_atomic_read_u32(&node->seg_offset))));
-  PrintEbiTreeRecursive(ConvertToEbiNode(ebitree_dsa_area, node->right));
+  EbiPrintTreeRecursive(EbiConvertToNode(ebitree_dsa_area, node->right));
 }
 
 #endif

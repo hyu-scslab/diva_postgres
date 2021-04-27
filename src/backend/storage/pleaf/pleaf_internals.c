@@ -63,7 +63,7 @@ bool
 PLeafCheckVisibility(TransactionId xmin, TransactionId xmax) 
 {
 	assert(xmin <= xmax);
-	return (Sift(xmin, xmax) != NULL);
+	return (EbiSift(xmin, xmax) != NULL);
 }
 
 /*

@@ -83,7 +83,10 @@ bool		IgnoreSystemIndexes = false;
  */
 
 #ifdef J3VM
-void j3vm_segfault_handler(int sig)
+static void j3vm_segfault_handler(int sig);
+
+static void
+j3vm_segfault_handler(int sig)
 {
 	ereport(LOG, (errmsg("@@@@@ segfault")));
 	sleep(3600);

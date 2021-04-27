@@ -4494,7 +4494,6 @@ l2:
 	if (is_second_old_exist && !is_repeated_update)
 	{
 		int ret_status;
-		int ret_value;
 		bool is_left;
 		Item meta_tup;
 		uint64 l_off, r_off;
@@ -4543,13 +4542,13 @@ l2:
 
 		if (is_left)
 		{
-			ret_value = PLeafAppendTuple(l_off, (uint64*) meta_tup, xmin, xmax,
-					second_oldtup.t_len, second_oldtup.t_data, lwlock);
+			PLeafAppendTuple(l_off, (uint64*) meta_tup, xmin, xmax,
+          second_oldtup.t_len, second_oldtup.t_data, lwlock);
 		}
 		else
 		{
-			ret_value = PLeafAppendTuple(r_off, (uint64*) (meta_tup + sizeof(uint64)), 
-					xmin, xmax, second_oldtup.t_len, second_oldtup.t_data, lwlock);
+			PLeafAppendTuple(r_off, (uint64*) (meta_tup + sizeof(uint64)), 
+          xmin, xmax, second_oldtup.t_len, second_oldtup.t_data, lwlock);
 		}
 
 		// ret_value 

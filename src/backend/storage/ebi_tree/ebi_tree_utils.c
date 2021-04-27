@@ -20,94 +20,108 @@
 #include "storage/ebi_tree.h"
 #include "storage/ebi_tree_utils.h"
 
-static dsa_pointer AllocTask(dsa_area* area, dsa_pointer dsa_node);
+static dsa_pointer EbiAllocMpscQueueNode(dsa_area* area, dsa_pointer dsa_node);
+static EbiSpscQueueNode EbiAllocSpscQueueNode(
+    EbiNode node,
+    dsa_pointer dsa_ptr);
 
-static EbiListElement EbiListElementInit(dsa_pointer dsa_node);
+/*
+ * MPSC Queue Implementation
+ */
 
 dsa_pointer
-InitQueue(dsa_area* area) {
+EbiInitMpscQueue(dsa_area* area) {
   dsa_pointer dsa_queue, dsa_sentinel;
-  TaskQueue queue;
+  EbiMpscQueue queue;
 
   dsa_queue =
-      dsa_allocate_extended(area, sizeof(TaskQueueStruct), DSA_ALLOC_ZERO);
+      dsa_allocate_extended(area, sizeof(EbiMpscQueueStruct), DSA_ALLOC_ZERO);
 
-  dsa_sentinel = AllocTask(area, InvalidDsaPointer);
+  dsa_sentinel = EbiAllocMpscQueueNode(area, InvalidDsaPointer);
 
-  queue = (TaskQueue)dsa_get_address(area, dsa_queue);
-  queue->head = queue->tail = dsa_sentinel;
+  queue = (EbiMpscQueue)dsa_get_address(area, dsa_queue);
+  queue->front = queue->rear = dsa_sentinel;
 
   return dsa_queue;
 }
 
 static dsa_pointer
-AllocTask(dsa_area* area, dsa_pointer dsa_node) {
+EbiAllocMpscQueueNode(dsa_area* area, dsa_pointer dsa_node) {
   dsa_pointer dsa_task;
-  TaskNode task;
+  EbiMpscQueueNode task;
 
   dsa_task =
-      dsa_allocate_extended(area, sizeof(TaskNodeStruct), DSA_ALLOC_ZERO);
-  task = (TaskNode)dsa_get_address(area, dsa_task);
+      dsa_allocate_extended(area, sizeof(EbiMpscQueueNodeData), DSA_ALLOC_ZERO);
+  task = (EbiMpscQueueNode)dsa_get_address(area, dsa_task);
   task->dsa_node = dsa_node;
-  pg_atomic_init_u32(&task->next, InvalidDsaPointer);
+  dsa_pointer_atomic_init(&task->next, InvalidDsaPointer);
 
   return dsa_task;
 }
 
 void
-DeleteQueue(dsa_area* area, dsa_pointer dsa_queue) {
-  TaskQueue queue;
+EbiDeleteMpscQueue(dsa_area* area, dsa_pointer dsa_queue) {
+  EbiMpscQueue queue;
+  dsa_pointer dsa_node;
+  EbiNode node;
 
-  if (dsa_queue != InvalidDsaPointer) {
-    while (Dequeue(area, dsa_queue) != InvalidDsaPointer) {
+  if (DsaPointerIsValid(dsa_queue)) {
+    dsa_node = EbiMpscDequeue(area, dsa_queue);
+
+    while (DsaPointerIsValid(dsa_node)) {
+      /* Delete node */
+      node = EbiConvertToNode(area, dsa_node);
+      EbiDeleteNode(node, dsa_node);
+
+      dsa_node = EbiMpscDequeue(area, dsa_queue);
     }
 
-    queue = (TaskQueue)dsa_get_address(area, dsa_queue);
-    dsa_free(area, queue->head);
+    queue = (EbiMpscQueue)dsa_get_address(area, dsa_queue);
+    dsa_free(area, queue->front);
     dsa_free(area, dsa_queue);
   }
 }
 
 bool
-QueueIsEmpty(dsa_area* area, dsa_pointer dsa_queue) {
-  TaskQueue queue;
-  queue = (TaskQueue)dsa_get_address(area, dsa_queue);
-  return queue->tail == queue->head;
+EbiMpscQueueIsEmpty(dsa_area* area, dsa_pointer dsa_queue) {
+  EbiMpscQueue queue;
+  queue = (EbiMpscQueue)dsa_get_address(area, dsa_queue);
+  return queue->rear == queue->front;
 }
 
 void
-Enqueue(dsa_area* area, dsa_pointer dsa_queue, dsa_pointer dsa_node) {
-  TaskQueue queue;
-  TaskNode tail;
-  dsa_pointer dsa_new_tail;
-  dsa_pointer dsa_tail;
+EbiMpscEnqueue(dsa_area* area, dsa_pointer dsa_queue, dsa_pointer dsa_node) {
+  EbiMpscQueue queue;
+  EbiMpscQueueNode rear;
+  dsa_pointer dsa_new_rear;
+  dsa_pointer dsa_rear;
   bool success;
+  dsa_pointer expected;
 
-  queue = (TaskQueue)dsa_get_address(area, dsa_queue);
-  dsa_new_tail = AllocTask(area, dsa_node);
+  queue = (EbiMpscQueue)dsa_get_address(area, dsa_queue);
+  dsa_new_rear = EbiAllocMpscQueueNode(area, dsa_node);
 
   success = false;
+  expected = InvalidDsaPointer;
 
   while (!success) {
-    uint32 expected = 0;
+    dsa_rear = queue->rear;
 
-    dsa_tail = queue->tail;
-
-    tail = (TaskNode)dsa_get_address(area, dsa_tail);
+    rear = (EbiMpscQueueNode)dsa_get_address(area, dsa_rear);
 
     // Try logical enqueue, not visible to the dequeuer.
-    success = pg_atomic_compare_exchange_u32(
-        (pg_atomic_uint32*)(&tail->next), &expected, dsa_new_tail);
+    success = dsa_pointer_atomic_compare_exchange(
+        &rear->next, &expected, dsa_new_rear);
 
     // Physical enqueue.
     if (success) {
-      // The thread that succeeded in changing the tail is responsible for the
+      // The thread that succeeded in changing the rear is responsible for the
       // physical enqueue. Other threads that fail might retry the loop, but
-      // the ones that read the tail before the tail is changed will fail on
+      // the ones that read the rear before the rear is changed will fail on
       // calling CAS since the next pointer is not nullptr. Thus, only the
-      // threads that read the tail after the new tail assignment will be
+      // threads that read the rear after the new rear assignment will be
       // competing for logical enqueue.
-      queue->tail = dsa_new_tail;
+      queue->rear = dsa_new_rear;
     } else {
       // Instead of retrying right away, calling yield() will save the CPU
       // from wasting cycles.
@@ -118,143 +132,156 @@ Enqueue(dsa_area* area, dsa_pointer dsa_queue, dsa_pointer dsa_node) {
 }
 
 dsa_pointer
-Dequeue(dsa_area* area, dsa_pointer dsa_queue) {
-  TaskQueue queue;
-  dsa_pointer dsa_head, dsa_next;
-  TaskNode head, next;
+EbiMpscDequeue(dsa_area* area, dsa_pointer dsa_queue) {
+  EbiMpscQueue queue;
+  dsa_pointer dsa_front, dsa_next;
+  EbiMpscQueueNode front, next;
   dsa_pointer ret;
 
-  queue = (TaskQueue)dsa_get_address(area, dsa_queue);
+  queue = (EbiMpscQueue)dsa_get_address(area, dsa_queue);
 
-  dsa_head = queue->head;
-  head = (TaskNode)dsa_get_address(area, dsa_head);
+  dsa_front = queue->front;
+  front = (EbiMpscQueueNode)dsa_get_address(area, dsa_front);
 
-  // dsa_next = head->next;
-  dsa_next = pg_atomic_read_u32(&head->next);
-  if (dsa_next == InvalidDsaPointer) {
+  dsa_next = dsa_pointer_atomic_read(&front->next);
+  if (!DsaPointerIsValid(dsa_next)) {
     return InvalidDsaPointer;
   }
 
-  next = (TaskNode)dsa_get_address(area, dsa_next);
+  next = (EbiMpscQueueNode)dsa_get_address(area, dsa_next);
 
   ret = next->dsa_node;
 
   // This is a MPSC queue.
-  queue->head = dsa_next;
+  queue->front = dsa_next;
 
   // Without recycling.
-  dsa_free(area, dsa_head);
+  dsa_free(area, dsa_front);
 
   return ret;
 }
 
 void
-PrintQueue(dsa_area* area, dsa_pointer dsa_queue) {
-  TaskQueue queue;
+EbiPrintMpscQueue(dsa_area* area, dsa_pointer dsa_queue) {
+  EbiMpscQueue queue;
   dsa_pointer dsa_tmp;
-  TaskNode tmp;
+  EbiMpscQueueNode tmp;
 
-  queue = (TaskQueue)dsa_get_address(area, dsa_queue);
-  dsa_tmp = queue->head;
+  queue = (EbiMpscQueue)dsa_get_address(area, dsa_queue);
+  dsa_tmp = queue->front;
 
   ereport(LOG, (errmsg("----Print Queue----")));
   while (dsa_tmp != InvalidDsaPointer) {
-    tmp = (TaskNode)dsa_get_address(area, dsa_tmp);
+    tmp = (EbiMpscQueueNode)dsa_get_address(area, dsa_tmp);
     if (tmp->dsa_node != InvalidDsaPointer) {
       ereport(LOG, (errmsg("%ld", tmp->dsa_node)));
     }
-    dsa_tmp = pg_atomic_read_u32(&tmp->next);
+    dsa_tmp = dsa_pointer_atomic_read(&tmp->next);
   }
 }
 
 /*
- * Linked List Implementation
+ * SPSC Queue Implementation
  */
 
-static EbiListElement
-EbiListElementInit(dsa_pointer dsa_node) {
-  EbiListElement new_element;
+EbiSpscQueue
+EbiInitSpscQueue(void) {
+  EbiSpscQueue queue;
 
-  new_element = (EbiListElement)palloc(sizeof(struct EbiListElementData));
-  new_element->dsa_node = dsa_node;
-  new_element->next = NULL;
+  queue = (EbiSpscQueue)palloc(sizeof(struct EbiSpscQueueData));
+  queue->front = queue->rear = NULL;
 
-  return new_element;
+  return queue;
 }
 
 void
-EbiListInsert(dsa_area* area, EbiList list, dsa_pointer dsa_node) {
-  EbiListElement prev, curr, new;
-  EbiNode node, curr_node;
+EbiDeleteSpscQueue(EbiSpscQueue queue) {
+  EbiNode front;
+  dsa_pointer dsa_ptr;
 
-  new = EbiListElementInit(dsa_node);
+  Assert(queue != NULL);
 
-  if (list->head == NULL) {
-    list->head = new;
-    return;
+  while (!EbiSpscQueueIsEmpty(queue)) {
+    dsa_ptr = EbiSpscQueueFrontDsaPointer(queue);
+    front = EbiSpscDequeue(queue);
+
+    EbiDeleteNode(front, dsa_ptr);
   }
 
-  node = ConvertToEbiNode(area, dsa_node);
-
-  curr = list->head;
-  curr_node = ConvertToEbiNode(area, curr->dsa_node);
-
-  /* When it should be a new head */
-  if (curr_node->max_xid > node->max_xid) {
-    list->head = new;
-    new->next = curr;
-    return;
-  }
-
-  prev = curr;
-  curr = curr->next;
-
-  while (curr != NULL) {
-    curr_node = ConvertToEbiNode(area, curr->dsa_node);
-
-    if (curr_node->max_xid > node->max_xid) {
-      break;
-    }
-
-    prev = curr;
-    curr = curr->next;
-  }
-
-  prev->next = new;
-  new->next = curr;
+  pfree(queue);
 }
 
 bool
-EbiListIsEmpty(EbiList list) {
-  return (list->head == NULL);
+EbiSpscQueueIsEmpty(EbiSpscQueue queue) {
+  return (queue->front == NULL);
+}
+
+static EbiSpscQueueNode
+EbiAllocSpscQueueNode(EbiNode node, dsa_pointer dsa_ptr) {
+  EbiSpscQueueNode new;
+
+  new = (EbiSpscQueueNode)palloc(sizeof(struct EbiSpscQueueNodeData));
+  new->node = node;
+  new->dsa_ptr = dsa_ptr;
+  new->next = NULL;
+
+  return new;
 }
 
 void
-EbiListDestroy(dsa_area* area, EbiList list) {
-  EbiListElement curr, tmp;
+EbiSpscEnqueue(EbiSpscQueue queue, EbiNode node, dsa_pointer dsa_ptr) {
+  EbiSpscQueueNode new;
 
-  curr = list->head;
-  while (curr != NULL) {
-    tmp = curr->next;
-    pfree(curr);
-    curr = tmp;
+  new = EbiAllocSpscQueueNode(node, dsa_ptr);
+
+  if (EbiSpscQueueIsEmpty(queue)) {
+    queue->rear = queue->front = new;
+    return;
   }
-  pfree(list);
+
+  /* Insert at the end */
+  queue->rear->next = new;
+  queue->rear = new;
 }
 
-void
-EbiListPrint(dsa_area* area, EbiList list) {
-  EbiListElement curr;
-  EbiNode tmp;
+EbiNode
+EbiSpscDequeue(EbiSpscQueue queue) {
+  EbiSpscQueueNode orig_front;
+  EbiNode ret;
 
-  curr = list->head;
+  /* The caller always ensures this property */
+  Assert(!EbiSpscQueueIsEmpty(queue));
 
-  ereport(LOG, (errmsg("Print List")));
-  while (curr != NULL) {
-    tmp = ConvertToEbiNode(area, curr->dsa_node);
-    ereport(LOG, (errmsg("seg id : %d", tmp->seg_id)));
-    curr = curr->next;
+  /* Temporarily save original front for deletion */
+  orig_front = queue->front;
+  ret = orig_front->node;
+
+  /* Advance the front */
+  queue->front = orig_front->next;
+
+  /* Check if the rear needs modification */
+  if (EbiSpscQueueIsEmpty(queue)) {
+    queue->rear = NULL;
   }
+
+  /* Deallocate memory */
+  pfree(orig_front);
+
+  return ret;
+}
+
+EbiNode
+EbiSpscQueueFront(EbiSpscQueue queue) {
+  /* The caller always ensures this property */
+  Assert(!EbiSpscQueueIsEmpty(queue));
+  return queue->front->node;
+}
+
+dsa_pointer
+EbiSpscQueueFrontDsaPointer(EbiSpscQueue queue) {
+  /* The caller always ensures this property */
+  Assert(!EbiSpscQueueIsEmpty(queue));
+  return queue->front->dsa_ptr;
 }
 
 #endif /* J3VM */

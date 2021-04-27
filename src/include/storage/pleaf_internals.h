@@ -66,12 +66,10 @@ extern bool PLeafLookupVersion(PLeafPage page,
 									PLeafOffset* offset, 
 									Snapshot snapshot);
 
-extern int PLeafAppendVersion(PLeafOffset offset, 
+extern void PLeafAppendVersion(PLeafOffset offset, 
 									PLeafOffset* ret_offset,
 									TransactionId xmin, TransactionId xmax, 
 									PLeafVersionOffset version_offset,
-									Size tuple_size, 
-									const void* tuple, 
 									LWLock* rwlock);
 
 #endif /* PLEAF_INTERNALS_H */

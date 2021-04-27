@@ -45,8 +45,8 @@ static int EbiTreeBufGetBufRef(
     EbiTreeSegmentOffset seg_offset);
 
 /* Segment control */
-static int OpenSegmentFile(EbiTreeSegmentId seg_id);
-static void CloseSegmentFile(int fd);
+static int EbiTreeOpenSegmentFile(EbiTreeSegmentId seg_id);
+static void EbiTreeCloseSegmentFile(int fd);
 static void EbiTreeReadSegmentPage(const EbiTreeBufTag *tag, int buf_id);
 static void EbiTreeWriteSegmentPage(const EbiTreeBufTag *tag, int buf_id);
 
@@ -98,7 +98,6 @@ EbiTreeBufInit(void) {
   /* Initialize descriptors */
   for (int i = 0; i < NEbiTreeBuffers; i++) {
     buf = GetEbiTreeBufDescriptor(i);
-    // InitEbiTreeBufDescriptor(buf);
     buf->tag.seg_id = 0;
     buf->tag.page_id = 0;
     buf->is_dirty = false;
@@ -325,7 +324,7 @@ find_cand:
       seg_id = buf->tag.seg_id;
 
       /* Check if the page related segment file has been removed */
-      if (EbiTreeSegIsAlive(EbiTreeShmem->ebitree, seg_id)) {
+      if (EbiSegIsAlive(EbiTreeShmem->ebitree, seg_id)) {
         // ereport(LOG, (errmsg("WRITE PAGE %d", seg_id)));
         EbiTreeWriteSegmentPage(&buf->tag, candidate_id);
       } else {
@@ -412,15 +411,17 @@ EbiTreeRemoveSegmentFile(EbiTreeSegmentId seg_id) {
 }
 
 /*
- * OpenSegmentFile
+ * EbiTreeOpenSegmentFile
  *
  * Open Segment file.
- * Caller have to call CloseSegmentFile(seg_id) after file io is done.
+ * Caller have to call EbiTreeCloseSegmentFile(seg_id) after file io is done.
  */
 static int
-OpenSegmentFile(EbiTreeSegmentId seg_id) {
+EbiTreeOpenSegmentFile(EbiTreeSegmentId seg_id) {
   int fd;
   char filename[128];
+
+  Assert(seg_id != 0);
 
   sprintf(filename, "ebitree.%08d", seg_id);
   fd = open(filename, O_RDWR, (mode_t)0600);
@@ -431,12 +432,12 @@ OpenSegmentFile(EbiTreeSegmentId seg_id) {
 }
 
 /*
- * CloseSegmentFile
+ * EbiTreeCloseSegmentFile
  *
  * Close Segment file.
  */
 static void
-CloseSegmentFile(int fd) {
+EbiTreeCloseSegmentFile(int fd) {
   Assert(fd >= 0);
 
   close(fd);
@@ -447,7 +448,7 @@ EbiTreeReadSegmentPage(const EbiTreeBufTag *tag, int buf_id) {
   ssize_t read;
   int fd;
 
-  fd = OpenSegmentFile(tag->seg_id);
+  fd = EbiTreeOpenSegmentFile(tag->seg_id);
 
   Assert(fd >= 0);
 
@@ -466,14 +467,14 @@ EbiTreeReadSegmentPage(const EbiTreeBufTag *tag, int buf_id) {
         EBI_TREE_SEG_PAGESZ);
   }
 
-  CloseSegmentFile(fd);
+  EbiTreeCloseSegmentFile(fd);
 }
 
 static void
 EbiTreeWriteSegmentPage(const EbiTreeBufTag *tag, int buf_id) {
   int fd;
 
-  fd = OpenSegmentFile(tag->seg_id);
+  fd = EbiTreeOpenSegmentFile(tag->seg_id);
 
   /*
   ereport(
@@ -490,7 +491,7 @@ EbiTreeWriteSegmentPage(const EbiTreeBufTag *tag, int buf_id) {
           EBI_TREE_SEG_PAGESZ,
           tag->page_id * EBI_TREE_SEG_PAGESZ));
 
-  CloseSegmentFile(fd);
+  EbiTreeCloseSegmentFile(fd);
 }
 
 /*

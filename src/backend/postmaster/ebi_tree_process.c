@@ -201,6 +201,7 @@ EbiTreeProcessMain(void) {
     long cur_timeout;
     uint32 curr_slot;
     uint32 prev_slot;
+    uint64 refcnt;
 
     /* Clear any already-pending wakeups */
     ResetLatch(MyLatch);
@@ -209,7 +210,7 @@ EbiTreeProcessMain(void) {
 
     cur_timeout = EbiTreeDelay;
     curr_slot = pg_atomic_read_u32(&EbiTreeShmem->curr_slot);
-    prev_slot = (curr_slot + 1) % 2;
+    prev_slot = (curr_slot + 1) % EBI_NUM_GC_QUEUE;
 
     /* EBI tree operations */
     if (!EbiMpscQueueIsEmpty(ebitree_dsa_area, EbiTreeShmem->unlink_queue)) {
@@ -219,8 +220,16 @@ EbiTreeProcessMain(void) {
           delete_queue[curr_slot]);
     }
 
-    if (!EbiSpscQueueIsEmpty(delete_queue[curr_slot])) {
-      EbiDeleteNodes(delete_queue[curr_slot]);
+    pg_memory_barrier();
+
+    refcnt = pg_atomic_read_u64(&EbiTreeShmem->gc_queue_refcnt[prev_slot]);
+    if (refcnt == 0) {
+      EbiDeleteNodes(delete_queue[prev_slot]);
+
+      /* Switch slot */
+      pg_atomic_write_u32(&EbiTreeShmem->curr_slot, prev_slot);
+
+      pg_memory_barrier();
     }
 
     if (EbiNeedsNewNode(EbiTreeShmem->ebitree)) {

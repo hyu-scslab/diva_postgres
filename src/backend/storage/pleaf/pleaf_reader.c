@@ -37,7 +37,6 @@ PLeafLookupVersion(PLeafPage page,
 {
 
 	PLeafVersion first_version, version;
-	PLeafVersionId version_id;
 	PLeafVersionIndex version_index;
 	PLeafVersionIndexData version_index_data;
 	TransactionId xmin;
@@ -92,26 +91,7 @@ PLeafLookupVersion(PLeafPage page,
 	 */
 	if((status = PLeafIsVisible(snapshot, xmin, xmax)) == PLEAF_LOOKUP_BACKWARD) 
 	{
-		/* Version head should be changed, and it must guarantee */
-		version_index_data = *version_index;
-		assert(version_head != PLeafGetVersionIndexHead(version_index_data));
-
-		/* Read a version head one more. No need to read a version tail */
-		version_head = PLeafGetVersionIndexHead(version_index_data);
-
-		/* If empty, return immediately */
-		if (PLeafCheckEmptiness(version_head, version_tail)) 
-			return true;
-
-		/* Get the head version */
-		version = PLeafPageGetVersion(first_version, version_head % capacity);
-		assert(version_id != PLeafGetVersionId(version));
-		
-		/* Get xmin and xmax value */
-		PLeafGetVersionInfo(PLeafGetVersionId(version), &xmin, &xmax);
-	
-		/* Check visibility */
-		status = PLeafIsVisible(snapshot, xmin, xmax);
+    return true;
 	}
 
 	/* If found, return immediately */

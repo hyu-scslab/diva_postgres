@@ -48,7 +48,6 @@ static void EbiPushToGarbageQueue(
     EbiNode node,
     dsa_pointer dsa_node);
 static void EbiCompactNode(EbiTree ebitree, dsa_pointer dsa_node);
-// static void EbiDeleteNode(EbiNode node, dsa_pointer dsa_ptr);
 static void EbiDeleteTreeRecursive(EbiNode node, dsa_pointer dsa_node);
 
 static void EbiLinkProxy(dsa_pointer dsa_proxy, dsa_pointer dsa_proxy_target);
@@ -62,6 +61,12 @@ static void EbiSetRightBoundary(EbiNode node, Snapshot snapshot);
 static dsa_pointer EbiSetRightBoundaryRecursive(
     dsa_pointer dsa_node,
     Snapshot snapshot);
+
+/* External function's internal implementation */
+static EbiNode EbiSiftInternal(TransactionId vmin, TransactionId vmax);
+static bool EbiSegIsAliveInternal(
+    dsa_pointer dsa_ebitree,
+    EbiTreeSegmentId seg_id);
 
 /* DSA based version of CopySnapshot in snapmgr.c */
 static dsa_pointer EbiDsaCopySnapshot(Snapshot snapshot);
@@ -500,8 +505,6 @@ EbiUnlinkFromParent(EbiNode node) {
     parent->right = InvalidDsaPointer;
   }
 
-  node->max_xid = EbiTreeGetMaxTransactionId();
-
   /* Version counter */
   curr = node;
   while (curr != NULL) {
@@ -611,22 +614,13 @@ EbiLinkProxy(dsa_pointer dsa_proxy, dsa_pointer dsa_proxy_target) {
 
 void
 EbiDeleteNodes(EbiSpscQueue delete_queue) {
-  TransactionId oldest_active_xid;
   EbiNode front;
   dsa_pointer dsa_ptr;
 
-  oldest_active_xid = EbiTreeGetOldestActiveTransactionId();
-
   while (!EbiSpscQueueIsEmpty(delete_queue)) {
-    front = EbiSpscQueueFront(delete_queue);
     dsa_ptr = EbiSpscQueueFrontDsaPointer(delete_queue);
 
-    /*
-     * The insertion order ensures that the queue is sorted in ascending order
-     */
-    if (front->max_xid > oldest_active_xid) {
-      break;
-    }
+    pg_memory_barrier();
 
     front = EbiSpscDequeue(delete_queue);
 
@@ -666,6 +660,27 @@ EbiDeleteNode(EbiNode node, dsa_pointer dsa_ptr) {
 
 EbiNode
 EbiSift(TransactionId vmin, TransactionId vmax) {
+  uint32 my_slot;
+  EbiNode ret;
+
+  /* Must be place before entering the EBI-tree */
+  my_slot = pg_atomic_read_u32(&EbiTreeShmem->curr_slot);
+  pg_atomic_fetch_add_u64(&EbiTreeShmem->gc_queue_refcnt[my_slot], 1);
+
+  pg_memory_barrier();
+
+  ret = EbiSiftInternal(vmin, vmax);
+
+  pg_memory_barrier();
+
+  /* Must be place after traversing the EBI-tree */
+  pg_atomic_fetch_sub_u64(&EbiTreeShmem->gc_queue_refcnt[my_slot], 1);
+
+  return ret;
+}
+
+static EbiNode
+EbiSiftInternal(TransactionId vmin, TransactionId vmax) {
   EbiTree ebitree;
   EbiNode curr, left, right;
   bool left_includes, right_includes;
@@ -682,7 +697,7 @@ EbiSift(TransactionId vmin, TransactionId vmax) {
   /* The version is already dead, may be cleaned */
   if (!EbiOverlaps(curr, vmin, vmax)) return NULL;
 
-  while (!EbiIsLeaf(curr)) {
+  while ((curr != NULL) && !EbiIsLeaf(curr)) {
     left = EbiConvertToNode(ebitree_dsa_area, curr->left);
     right = EbiConvertToNode(ebitree_dsa_area, curr->right);
 
@@ -696,14 +711,14 @@ EbiSift(TransactionId vmin, TransactionId vmax) {
       if (!EbiOverlaps(right, vmin, vmax)) {
         return NULL;
       } else {
-        curr = right;
+        curr = EbiConvertToNode(ebitree_dsa_area, curr->right);
       }
     } else if (!right_exists) {
       // Only the right is null and the version does not fit into the left
       if (!EbiOverlaps(left, vmin, vmax)) {
         return NULL;
       } else {
-        curr = left;
+        curr = EbiConvertToNode(ebitree_dsa_area, curr->left);
       }
     } else {
       // Both are not null
@@ -714,9 +729,9 @@ EbiSift(TransactionId vmin, TransactionId vmax) {
         // Overlaps both child, current interval is where it fits
         break;
       } else if (left_includes) {
-        curr = left;
+        curr = EbiConvertToNode(ebitree_dsa_area, curr->left);
       } else if (right_includes) {
-        curr = right;
+        curr = EbiConvertToNode(ebitree_dsa_area, curr->right);
       } else {
         return NULL;
       }
@@ -820,6 +835,27 @@ EbiLookupVersion(
 
 bool
 EbiSegIsAlive(dsa_pointer dsa_ebitree, EbiTreeSegmentId seg_id) {
+  uint32 my_slot;
+  bool ret;
+
+  /* Must be place before entering the EBI-tree */
+  my_slot = pg_atomic_read_u32(&EbiTreeShmem->curr_slot);
+  pg_atomic_fetch_add_u64(&EbiTreeShmem->gc_queue_refcnt[my_slot], 1);
+
+  pg_memory_barrier();
+
+  ret = EbiSegIsAliveInternal(dsa_ebitree, seg_id);
+
+  pg_memory_barrier();
+
+  /* Must be place after traversing the EBI-tree */
+  pg_atomic_fetch_sub_u64(&EbiTreeShmem->gc_queue_refcnt[my_slot], 1);
+
+  return ret;
+}
+
+static bool
+EbiSegIsAliveInternal(dsa_pointer dsa_ebitree, EbiTreeSegmentId seg_id) {
   EbiTree ebitree;
   dsa_pointer dsa_curr;
   EbiNode curr;

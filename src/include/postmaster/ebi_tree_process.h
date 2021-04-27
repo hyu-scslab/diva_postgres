@@ -33,7 +33,7 @@ typedef struct {
   pg_atomic_uint64 num_versions; /* Estimated number of versions in the tree */
   dsa_pointer unlink_queue;      /* EbiMpscQueue */
   pg_atomic_uint32 curr_slot;    /* Pointer to current slot */
-  uint64 gc_queue_refcnt[EBI_NUM_GC_QUEUE]; /* Slotted GC queue */
+  pg_atomic_uint64 gc_queue_refcnt[EBI_NUM_GC_QUEUE]; /* Slotted GC queue */
 } EbiTreeShmemStruct;
 
 extern EbiTreeShmemStruct* EbiTreeShmem;

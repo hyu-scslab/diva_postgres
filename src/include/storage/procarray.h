@@ -99,8 +99,6 @@ extern TransactionId GetOldestSafeDecodingTransactionId(bool catalogOnly);
 #ifdef J3VM
 extern TransactionId PLeafGetOldestActiveTransactionId(void);
 extern TransactionId PLeafGetMaxTransactionId(void);
-extern TransactionId EbiTreeGetOldestActiveTransactionId(void);
-extern TransactionId EbiTreeGetMaxTransactionId(void);
 #endif
 extern VirtualTransactionId *GetVirtualXIDsDelayingChkpt(int *nvxids);
 extern bool HaveVirtualXIDsDelayingChkpt(VirtualTransactionId *vxids, int nvxids);

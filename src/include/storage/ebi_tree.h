@@ -53,8 +53,6 @@ typedef struct EbiNodeData {
   EbiTreeSegmentId seg_id;       /* file segment */
   pg_atomic_uint32 seg_offset;   /* aligned version offset */
   pg_atomic_uint64 num_versions; /* number of versions */
-
-  TransactionId max_xid; /* used for physical deletion */
 } EbiNodeData;
 
 typedef struct EbiNodeData* EbiNode;

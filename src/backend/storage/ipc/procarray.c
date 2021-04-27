@@ -2335,6 +2335,12 @@ PLeafGetMaxTransactionId(void)
 	return XidFromFullTransactionId(ShmemVariableCache->nextFullXid);
 }
 
+TransactionId
+EbiGetMaxTransactionId(void)
+{
+	return PLeafGetMaxTransactionId();
+}
+
 #endif
 /*
  * GetVirtualXIDsDelayingChkpt -- Get the VXIDs of transactions that are

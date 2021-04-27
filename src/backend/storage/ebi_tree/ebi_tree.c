@@ -25,7 +25,8 @@
 #include "utils/dynahash.h"
 #include "utils/snapmgr.h"
 
-#define NUM_VERSIONS_PER_CHUNK 1000
+#define NUM_VERSIONS_PER_CHUNK (1000)
+#define EBI_AVG_STAT_WEIGHT (0.999)
 
 /* src/include/postmaster/ebitree_process.h */
 dsa_area* ebitree_dsa_area;
@@ -63,7 +64,7 @@ static dsa_pointer EbiSetRightBoundaryRecursive(
     Snapshot snapshot);
 
 /* External function's internal implementation */
-static EbiNode EbiSiftInternal(TransactionId vmin, TransactionId vmax);
+static EbiNode EbiSiftInternal(TransactionId xmin, TransactionId xmax);
 static bool EbiSegIsAliveInternal(
     dsa_pointer dsa_ebitree,
     EbiTreeSegmentId seg_id);
@@ -79,7 +80,13 @@ static bool EbiIsLeaf(EbiNode node);
 
 static dsa_pointer EbiSibling(EbiNode node);
 
-static bool EbiOverlaps(EbiNode node, TransactionId vmin, TransactionId vmax);
+static bool EbiOverlaps(EbiNode node, TransactionId xmin, TransactionId xmax);
+
+/* Statisitcs */
+static void EbiUpdateAverageVersionLifetime(
+    TransactionId xmin,
+    TransactionId xmax);
+static void EbiUpdateTimespec(void);
 
 dsa_pointer
 EbiInitTree(dsa_area* area) {
@@ -171,20 +178,6 @@ EbiDeleteTreeRecursive(EbiNode node, dsa_pointer dsa_node) {
   EbiDeleteTreeRecursive(
       EbiConvertToNode(ebitree_dsa_area, node->right), node->right);
   EbiDeleteNode(node, dsa_node);
-}
-
-bool
-EbiNeedsNewNode(dsa_pointer dsa_ebitree) {
-  EbiTree ebitree;
-  EbiNode recent_node;
-  bool ret;
-
-  ebitree = EbiConvertToTree(ebitree_dsa_area, dsa_ebitree);
-  recent_node = EbiConvertToNode(ebitree_dsa_area, ebitree->recent_node);
-
-  ret = DsaPointerIsValid(recent_node->left_boundary);
-
-  return ret;
 }
 
 void
@@ -342,6 +335,10 @@ EbiIncreaseRefCount(Snapshot snapshot) {
       // May delete the last recent node if there's no presence of any xacts.
       EbiDecreaseRefCount(dsa_prev_node);
     }
+
+    /* Stats */
+    EbiTreeShmem->max_xid = EbiGetMaxTransactionId();
+    EbiUpdateTimespec();
   }
 
   return dsa_recent_node;
@@ -659,7 +656,7 @@ EbiDeleteNode(EbiNode node, dsa_pointer dsa_ptr) {
 }
 
 EbiNode
-EbiSift(TransactionId vmin, TransactionId vmax) {
+EbiSift(TransactionId xmin, TransactionId xmax) {
   uint32 my_slot;
   EbiNode ret;
 
@@ -669,7 +666,9 @@ EbiSift(TransactionId vmin, TransactionId vmax) {
 
   pg_memory_barrier();
 
-  ret = EbiSiftInternal(vmin, vmax);
+  ret = EbiSiftInternal(xmin, xmax);
+
+  EbiUpdateAverageVersionLifetime(xmin, xmax);
 
   pg_memory_barrier();
 
@@ -680,7 +679,7 @@ EbiSift(TransactionId vmin, TransactionId vmax) {
 }
 
 static EbiNode
-EbiSiftInternal(TransactionId vmin, TransactionId vmax) {
+EbiSiftInternal(TransactionId xmin, TransactionId xmax) {
   EbiTree ebitree;
   EbiNode curr, left, right;
   bool left_includes, right_includes;
@@ -695,7 +694,7 @@ EbiSiftInternal(TransactionId vmin, TransactionId vmax) {
   if (!DsaPointerIsValid(curr->left_boundary)) return NULL;
 
   /* The version is already dead, may be cleaned */
-  if (!EbiOverlaps(curr, vmin, vmax)) return NULL;
+  if (!EbiOverlaps(curr, xmin, xmax)) return NULL;
 
   while ((curr != NULL) && !EbiIsLeaf(curr)) {
     left = EbiConvertToNode(ebitree_dsa_area, curr->left);
@@ -708,22 +707,22 @@ EbiSiftInternal(TransactionId vmin, TransactionId vmax) {
       return NULL;
     } else if (!left_exists) {
       // Only the left is null and the version does not fit into the right
-      if (!EbiOverlaps(right, vmin, vmax)) {
+      if (!EbiOverlaps(right, xmin, xmax)) {
         return NULL;
       } else {
         curr = EbiConvertToNode(ebitree_dsa_area, curr->right);
       }
     } else if (!right_exists) {
       // Only the right is null and the version does not fit into the left
-      if (!EbiOverlaps(left, vmin, vmax)) {
+      if (!EbiOverlaps(left, xmin, xmax)) {
         return NULL;
       } else {
         curr = EbiConvertToNode(ebitree_dsa_area, curr->left);
       }
     } else {
       // Both are not null
-      left_includes = EbiOverlaps(left, vmin, vmax);
-      right_includes = EbiOverlaps(right, vmin, vmax);
+      left_includes = EbiOverlaps(left, xmin, xmax);
+      right_includes = EbiOverlaps(right, xmin, xmax);
 
       if (left_includes && right_includes) {
         // Overlaps both child, current interval is where it fits
@@ -742,7 +741,7 @@ EbiSiftInternal(TransactionId vmin, TransactionId vmax) {
 }
 
 static bool
-EbiOverlaps(EbiNode node, TransactionId vmin, TransactionId vmax) {
+EbiOverlaps(EbiNode node, TransactionId xmin, TransactionId xmax) {
   Snapshot left_snap, right_snap;
 
   left_snap = (Snapshot)dsa_get_address(ebitree_dsa_area, node->left_boundary);
@@ -752,16 +751,16 @@ EbiOverlaps(EbiNode node, TransactionId vmin, TransactionId vmax) {
   Assert(left_snap != NULL);
 
   if (right_snap != NULL)
-    return XidInMVCCSnapshotForEBI(vmax, left_snap) &&
-           !XidInMVCCSnapshotForEBI(vmin, right_snap);
+    return XidInMVCCSnapshotForEBI(xmax, left_snap) &&
+           !XidInMVCCSnapshotForEBI(xmin, right_snap);
   else
-    return XidInMVCCSnapshotForEBI(vmax, left_snap);
+    return XidInMVCCSnapshotForEBI(xmax, left_snap);
 }
 
 EbiTreeVersionOffset
 EbiSiftAndBind(
-    TransactionId vmin,
-    TransactionId vmax,
+    TransactionId xmin,
+    TransactionId xmax,
     Size tuple_size,
     const void* tuple,
     LWLock* rwlock) {
@@ -775,7 +774,7 @@ EbiSiftAndBind(
 
   Assert(ebitree_dsa_area != NULL);
 
-  node = EbiSift(vmin, vmax);
+  node = EbiSift(xmin, xmax);
 
   if (node == NULL) {
     /* Reclaimable */
@@ -899,6 +898,20 @@ EbiSegIsAliveInternal(dsa_pointer dsa_ebitree, EbiTreeSegmentId seg_id) {
   return false;
 }
 
+bool
+EbiRecentNodeIsAlive(dsa_pointer dsa_ebitree) {
+  EbiTree ebitree;
+  EbiNode recent_node;
+  bool ret;
+
+  ebitree = EbiConvertToTree(ebitree_dsa_area, dsa_ebitree);
+  recent_node = EbiConvertToNode(ebitree_dsa_area, ebitree->recent_node);
+
+  ret = DsaPointerIsValid(recent_node->left_boundary);
+
+  return ret;
+}
+
 EbiTree
 EbiConvertToTree(dsa_area* area, dsa_pointer ptr) {
   return (EbiTree)dsa_get_address(area, ptr);
@@ -946,6 +959,34 @@ EbiSibling(EbiNode node) {
   } else {
     return InvalidDsaPointer;
   }
+}
+
+static void
+EbiUpdateAverageVersionLifetime(TransactionId xmin, TransactionId xmax) {
+  uint32 len;
+
+  /* Statisitcs for new node generation */
+  len = xmax - xmin;
+
+  /*
+   * Average value can be touched by multiple processes so that
+   * we need to decide only one process to update the value at a time.
+   */
+  if (pg_atomic_test_set_flag(&EbiTreeShmem->is_updating_stat)) {
+    if (unlikely(EbiTreeShmem->average_ver_len == 0))
+      EbiTreeShmem->average_ver_len = len;
+    else
+      EbiTreeShmem->average_ver_len =
+          EbiTreeShmem->average_ver_len * EBI_AVG_STAT_WEIGHT +
+          len * (1.0 - EBI_AVG_STAT_WEIGHT);
+
+    pg_atomic_clear_flag(&EbiTreeShmem->is_updating_stat);
+  }
+}
+
+static void
+EbiUpdateTimespec(void) {
+  EbiGetCurrentTime(&EbiTreeShmem->last_timespec);
 }
 
 void

@@ -13,6 +13,8 @@
 #ifndef EBI_TREE_H
 #define EBI_TREE_H
 
+#include <time.h>
+
 #include "c.h"
 #include "storage/lwlock.h"
 #include "utils/dsa.h"
@@ -37,6 +39,9 @@ typedef uint64 EbiTreeVersionOffset;
   (version_offset & EBI_TREE_SEG_OFFSET_MASK)
 #define EBI_TREE_SEG_TO_VERSION_OFFSET(seg_id, seg_offset) \
   ((((uint64)(seg_id)) << 32) | seg_offset)
+
+#define EbiGetCurrentTime(timespec) clock_gettime(CLOCK_MONOTONIC, timespec)
+#define EbiGetTimeElapsedInSeconds(now, base) (now.tv_sec - base.tv_sec)
 
 typedef struct EbiNodeData {
   dsa_pointer parent;
@@ -112,9 +117,7 @@ extern void EbiUnlinkNodes(
 extern void EbiDeleteNodes(EbiSpscQueue delete_queue);
 extern void EbiDeleteNode(EbiNode node, dsa_pointer dsa_ptr);
 
-extern bool EbiNeedsNewNode(dsa_pointer dsa_ebitree);
-
-extern EbiNode EbiSift(TransactionId vmin, TransactionId vmax);
+extern EbiNode EbiSift(TransactionId xmin, TransactionId xmax);
 
 extern EbiTreeVersionOffset EbiSiftAndBind(
     TransactionId xmin,
@@ -129,6 +132,8 @@ extern int EbiLookupVersion(
     void** ret_value);
 
 extern bool EbiSegIsAlive(dsa_pointer dsa_ebitree, EbiTreeSegmentId seg_id);
+
+extern bool EbiRecentNodeIsAlive(dsa_pointer dsa_ebitree);
 
 /* Debug */
 void EbiPrintTree(dsa_pointer dsa_ebitree);

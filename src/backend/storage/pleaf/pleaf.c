@@ -101,9 +101,7 @@ PLeafLookupTuple(
 	
 	/* Read value from EBI-Tree */
 	// API in EBI-Tree
-	// TODO: EBI(version_offset, tuple_size, ret_value); ...
-  ebi_page_frame_id = EbiTreeLookupVersion(version_offset, tuple_size,
-                                           ret_value);
+  ebi_page_frame_id = EbiLookupVersion(version_offset, tuple_size, ret_value);
 
 	// Return ebi-page-frame-id
 	return ebi_page_frame_id;
@@ -115,7 +113,7 @@ PLeafLookupTuple(
  * Append new version to p-leaf version array and new version data to EBI-tree.
  * If the version is invisible, return immediately
  */
-int
+void
 PLeafAppendTuple(  
 		PLeafOffset offset,
 		PLeafOffset* ret_offset,
@@ -132,16 +130,13 @@ PLeafAppendTuple(
 	 * It can be already obsolete version
 	 * version_offset = EBI-APPEND-VERSION
 	 */
-  // TODO: EBI Sift return value
-	version_offset = EbiTreeSiftAndBind(xmin, xmax, tuple_size, tuple, rwlock);
+	version_offset = EbiSiftAndBind(xmin, xmax, tuple_size, tuple, rwlock);
 
 	if (version_offset == PLEAF_INVALID_VERSION_OFFSET) {
-		return PLEAF_APPEND_NOTHING;
+		return;
 	}
 
-	return PLeafAppendVersion(
-			offset, ret_offset, xmin, xmax, 
-			version_offset, tuple_size, tuple, rwlock);
+	PLeafAppendVersion(offset, ret_offset, xmin, xmax, version_offset, rwlock);
 }
 
 /*

@@ -34,7 +34,7 @@ PLeafIsLeftLookup(
 		TransactionId xid_bound,
 		Snapshot snapshot);
 
-extern int
+extern void 
 PLeafAppendTuple(
 		uint64 offset,
 		uint64* ret_offset,

@@ -951,7 +951,7 @@ dsa_get_address(dsa_area *area, dsa_pointer dp)
 	{
 		/* Call for effect (we don't need the result). */
 #ifdef J3VM
-		ereport(LOG, (errmsg("@@@ get_segment_by_index, %d", index)));
+		ereport(LOG, (errmsg("@@@ get_segment_by_index, %ld", index)));
 #endif
 		get_segment_by_index(area, index);
 	}

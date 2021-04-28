@@ -2330,19 +2330,13 @@ PLeafGetOldestActiveTransactionId(void)
 }
 
 TransactionId
-EbiTreeGetOldestActiveTransactionId(void)
-{
-  return PLeafGetOldestActiveTransactionId();
-}
-
-TransactionId
 PLeafGetMaxTransactionId(void)
 {
 	return XidFromFullTransactionId(ShmemVariableCache->nextFullXid);
 }
 
 TransactionId
-EbiTreeGetMaxTransactionId(void)
+EbiGetMaxTransactionId(void)
 {
 	return PLeafGetMaxTransactionId();
 }

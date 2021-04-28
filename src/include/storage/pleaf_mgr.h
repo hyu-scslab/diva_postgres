@@ -14,12 +14,6 @@
 #ifndef PLEAF_MGR_H
 #define PLEAF_MGR_H
 
-#define PLeafGetCurrentTime(timespec) \
-	clock_gettime(CLOCK_MONOTONIC, timespec)
-
-#define PLeafGetTimeElapsedInSeconds(now, base) \
-	(now.tv_sec - base.tv_sec)
-
 extern void PLeafManagerMain(void) pg_attribute_noreturn();
 
 #endif /* PLEAF_MGR_H */

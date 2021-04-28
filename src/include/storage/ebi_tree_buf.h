@@ -59,16 +59,10 @@ typedef struct EbiTreeBufMeta {
 /* Macros used as helper functions */
 #define GetEbiTreeBufDescriptor(id) (&EbiTreeBufDescriptors[(id)].desc)
 
-#define InitEbiTreeBufDescriptor(buf)                                      \
-  ((buf)->tag.seg_id = 0; (buf)->tag.page_id = 0; (buf)->is_dirty = false; \
-   pg_atomic_init_u32(&(buf)->refcnt, 0))
-
 #define InvalidEbiTreeBuf (INT_MAX)
 
 /* Check both globals.c and miscadmin.h */
 extern PGDLLIMPORT int NEbiTreeBuffers;
-
-extern int seg_fds[EBI_TREE_MAX_SEGMENTS];
 
 /* Public functions */
 extern Size EbiTreeBufShmemSize(void);

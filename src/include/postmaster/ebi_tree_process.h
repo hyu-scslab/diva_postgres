@@ -14,7 +14,9 @@
 #define EBI_TREE_PROCESS_H
 
 #include "c.h"
-#include "storage/ebi_tree.h"
+#include "utils/dsa.h"
+
+#define EBI_NUM_GC_QUEUE (2)
 
 extern void EbiTreeProcessMain(void) pg_attribute_noreturn();
 
@@ -24,14 +26,20 @@ extern void EbiTreeShmemInit(void);
 extern void EbiTreeDsaInit(void);
 
 typedef struct {
-  pid_t ebitree_pid; /* PID (0 if not started) */
-  dsa_handle handle;
-  dsa_pointer ebitree;      /* EbiTree */
-  dsa_pointer unlink_queue; /* MpscQueue */
-
-  int seg_id; /* next seg_id */
-
+  pid_t ebitree_pid;             /* PID (0 if not started) */
+  dsa_handle handle;             /* dsa handle */
+  dsa_pointer ebitree;           /* EbiTree */
+  uint32 seg_id;                 /* Next seg_id */
   pg_atomic_uint64 num_versions; /* Estimated number of versions in the tree */
+  dsa_pointer unlink_queue;      /* EbiMpscQueue */
+  pg_atomic_uint32 curr_slot;    /* Pointer to current slot */
+  pg_atomic_uint64 gc_queue_refcnt[EBI_NUM_GC_QUEUE]; /* Slotted GC queue */
+
+  /* Stats */
+  TransactionId max_xid;
+  uint32 average_ver_len;
+  pg_atomic_flag is_updating_stat;
+  struct timespec last_timespec;
 } EbiTreeShmemStruct;
 
 extern EbiTreeShmemStruct* EbiTreeShmem;

@@ -18,6 +18,7 @@
 #include "postgres.h"
 
 #include <signal.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "access/xlog.h"
@@ -30,6 +31,7 @@
 #include "postmaster/walwriter.h"
 #include "storage/bufmgr.h"
 #include "storage/condition_variable.h"
+#include "storage/ebi_tree.h"
 #include "storage/ebi_tree_buf.h"
 #include "storage/ebi_tree_utils.h"
 #include "storage/fd.h"
@@ -37,6 +39,7 @@
 #include "storage/lwlock.h"
 #include "storage/pmsignal.h"
 #include "storage/proc.h"
+#include "storage/procarray.h"
 #include "storage/procsignal.h"
 #include "storage/smgr.h"
 #include "utils/elog.h"
@@ -47,14 +50,18 @@
 #include "utils/resowner.h"
 #include "utils/timeout.h"
 
+int EbiGenerationMultiplier = 3; /* constant */
+int EbiGenerationDelay = 10;     /* seconds */
+
 /*
  * GUC parameters
  */
-int EbiTreeDelay = 200 * 10;
+int EbiTreeDelay = 200 * 10; /* milli-seconds */
 
 EbiTreeShmemStruct *EbiTreeShmem = NULL;
 
-EbiList delete_list;
+/* Delete queue for phsyical GC. Only accessed by the EBI-tree process alone. */
+EbiSpscQueue delete_queue[EBI_NUM_GC_QUEUE];
 
 /* Prototypes for private functions */
 static void HandleEbiTreeProcessInterrupts(void);
@@ -63,6 +70,8 @@ static void EbiTreeProcessInit(void);
 
 static void EbiTreeDsaAttach(void);
 static void EbiTreeDsaDetach(void);
+
+static bool EbiNeedsNewNode(void);
 
 /*
  * Main entry point for EBI tree process
@@ -194,6 +203,9 @@ EbiTreeProcessMain(void) {
    */
   for (;;) {
     long cur_timeout;
+    uint32 curr_slot;
+    uint32 prev_slot;
+    uint64 refcnt;
 
     /* Clear any already-pending wakeups */
     ResetLatch(MyLatch);
@@ -201,21 +213,32 @@ EbiTreeProcessMain(void) {
     HandleEbiTreeProcessInterrupts();
 
     cur_timeout = EbiTreeDelay;
-
-    // PrintEbiTree(EbiTreeShmem->ebitree);
+    curr_slot = pg_atomic_read_u32(&EbiTreeShmem->curr_slot);
+    prev_slot = (curr_slot + 1) % EBI_NUM_GC_QUEUE;
 
     /* EBI tree operations */
-    if (!QueueIsEmpty(ebitree_dsa_area, EbiTreeShmem->unlink_queue)) {
-      UnlinkNodes(
-          EbiTreeShmem->ebitree, EbiTreeShmem->unlink_queue, delete_list);
+    if (!EbiMpscQueueIsEmpty(ebitree_dsa_area, EbiTreeShmem->unlink_queue)) {
+      EbiUnlinkNodes(
+          EbiTreeShmem->ebitree,
+          EbiTreeShmem->unlink_queue,
+          delete_queue[curr_slot]);
     }
 
-    if (!EbiListIsEmpty(delete_list)) {
-      DeleteNodes(delete_list);
+    pg_memory_barrier();
+
+    refcnt = pg_atomic_read_u64(&EbiTreeShmem->gc_queue_refcnt[prev_slot]);
+    if (refcnt == 0) {
+      EbiDeleteNodes(delete_queue[prev_slot]);
+
+      /* Switch slot */
+      pg_atomic_write_u32(
+          &EbiTreeShmem->curr_slot, (curr_slot + 1) % EBI_NUM_GC_QUEUE);
+
+      pg_memory_barrier();
     }
 
-    if (NeedsNewNode(EbiTreeShmem->ebitree)) {
-      InsertNode(EbiTreeShmem->ebitree);
+    if (EbiNeedsNewNode()) {
+      EbiInsertNode(EbiTreeShmem->ebitree);
     }
 
     (void)WaitLatch(
@@ -224,6 +247,39 @@ EbiTreeProcessMain(void) {
         cur_timeout,
         WAIT_EVENT_EBI_TREE_MAIN);
   }
+}
+
+static bool
+EbiNeedsNewNode(void) {
+  TransactionId curr_max_xid;
+  TransactionId duration;
+  struct timespec now;
+  int elapsed;
+
+  /* Current recent node is not opened by the first visiting transaction */
+  if (!EbiRecentNodeIsAlive(EbiTreeShmem->ebitree)) {
+    return false;
+  }
+
+  /* Check average version lifetime */
+  curr_max_xid = EbiGetMaxTransactionId();
+  duration = curr_max_xid - EbiTreeShmem->max_xid;
+
+  Assert(duration > 0);
+
+  if (duration >= EbiTreeShmem->average_ver_len * EbiGenerationMultiplier) {
+    return true;
+  }
+
+  /* Check silent period */
+  EbiGetCurrentTime(&now);
+  elapsed = EbiGetTimeElapsedInSeconds(now, EbiTreeShmem->last_timespec);
+
+  if (elapsed >= EbiGenerationDelay) {
+    return true;
+  }
+
+  return false;
 }
 
 /*
@@ -239,9 +295,11 @@ HandleEbiTreeProcessInterrupts(void) {
   }
 
   if (ShutdownRequestPending) {
-    DeleteEbiTree(EbiTreeShmem->ebitree);
-    DeleteQueue(ebitree_dsa_area, EbiTreeShmem->unlink_queue);
-    EbiListDestroy(ebitree_dsa_area, delete_list);
+    EbiDeleteTree(EbiTreeShmem->ebitree);
+    EbiDeleteMpscQueue(ebitree_dsa_area, EbiTreeShmem->unlink_queue);
+    for (int i = 0; i < EBI_NUM_GC_QUEUE; i++) {
+      EbiDeleteSpscQueue(delete_queue[i]);
+    }
 
     EbiTreeDsaDetach();
     /* Normal exit from the EBI tree process is here */
@@ -285,8 +343,6 @@ EbiTreeShmemInit(void) {
 
   EbiTreeShmem =
       (EbiTreeShmemStruct *)ShmemInitStruct("EBI Tree Data", size, &found);
-  EbiTreeShmem->seg_id = 1;
-  pg_atomic_init_u64(&EbiTreeShmem->num_versions, 0);
 
   if (!found) {
     /*
@@ -294,6 +350,14 @@ EbiTreeShmemInit(void) {
      */
     MemSet(EbiTreeShmem, 0, size);
     Assert(EbiTreeShmem != NULL);
+
+    /* Init pg_atomic variables */
+    pg_atomic_init_u64(&EbiTreeShmem->num_versions, 0);
+    pg_atomic_init_u32(&EbiTreeShmem->curr_slot, 0);
+    for (int i = 0; i < EBI_NUM_GC_QUEUE; i++) {
+      pg_atomic_init_u64(&EbiTreeShmem->gc_queue_refcnt[i], 0);
+    }
+    pg_atomic_init_flag(&EbiTreeShmem->is_updating_stat);
   }
 
   EbiTreeBufInit();
@@ -325,10 +389,10 @@ EbiTreeDsaInit(void) {
       dsa_pin(area);
 
       /* Allocate a new EBI tree in dsa */
-      EbiTreeShmem->ebitree = InitEbiTree(area);
+      EbiTreeShmem->ebitree = EbiInitTree(area);
 
       /* Allocate queues in dsa */
-      EbiTreeShmem->unlink_queue = InitQueue(area);
+      EbiTreeShmem->unlink_queue = EbiInitMpscQueue(area);
 
       dsa_detach(area);
 
@@ -365,8 +429,10 @@ EbiTreeDsaDetach(void) {
 
 static void
 EbiTreeProcessInit(void) {
-  delete_list = (EbiList)palloc(sizeof(struct EbiListData));
-  delete_list->head = NULL;
+  /* Allocate GC queue */
+  for (int i = 0; i < EBI_NUM_GC_QUEUE; i++) {
+    delete_queue[i] = EbiInitSpscQueue();
+  }
 }
 
 #endif

@@ -92,6 +92,8 @@ PLeafLookupVersion(PLeafPage page,
 	 */
 	if((status = PLeafIsVisible(snapshot, xmin, xmax)) == PLEAF_LOOKUP_BACKWARD) 
 	{
+		return true;
+#if 0
 		/* Version head should be changed, and it must guarantee */
 		version_index_data = *version_index;
 		assert(version_head != PLeafGetVersionIndexHead(version_index_data));
@@ -112,6 +114,7 @@ PLeafLookupVersion(PLeafPage page,
 	
 		/* Check visibility */
 		status = PLeafIsVisible(snapshot, xmin, xmax);
+#endif
 	}
 
 	/* If found, return immediately */

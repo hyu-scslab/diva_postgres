@@ -238,14 +238,50 @@ extern void ExecSetTupleBound(int64 tuples_needed, PlanState *child_node);
  *		Execute the given node to return a(nother) tuple.
  * ----------------------------------------------------------------
  */
+#ifdef J3VM_CHSTAT
+extern bool j3vm_stat_is_olap;
+extern int j3vm_stat_call_depth;
+#endif /* J3VM_CHSTAT */
 #ifndef FRONTEND
 static inline TupleTableSlot *
 ExecProcNode(PlanState *node)
 {
+#ifdef J3VM_CHSTAT
+	if (j3vm_stat_is_olap)
+	{
+		/* Start time of the query plan node */
+		struct timespec starttime;
+		clock_gettime(CLOCK_MONOTONIC, &starttime);
+
+		node->starttime = starttime;
+
+		j3vm_stat_call_depth++;
+	}
+#endif /* J3VM_CHSTAT */
+
 	if (node->chgParam != NULL) /* something changed? */
 		ExecReScan(node);		/* let ReScan handle this */
 
-	return node->ExecProcNode(node);
+#ifdef J3VM_CHSTAT
+	TupleTableSlot* ret = node->ExecProcNode(node);
+	if (j3vm_stat_is_olap)
+	{
+		j3vm_stat_call_depth--;
+
+		/* End time of the query plan node */
+		struct timespec endtime;
+		clock_gettime(CLOCK_MONOTONIC, &endtime);
+
+		node->endtime = endtime;
+
+		node->totaltime = node->totaltime
+				+ (node->endtime.tv_sec - node->starttime.tv_sec) * 1000000000
+				+ (node->endtime.tv_nsec - node->starttime.tv_nsec);
+	}
+	return ret;
+#else
+ 	return node->ExecProcNode(node);
+#endif /* J3VM_CHSTAT */
 }
 #endif
 

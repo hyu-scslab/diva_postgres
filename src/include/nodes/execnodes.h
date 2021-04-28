@@ -1028,6 +1028,13 @@ typedef struct PlanState
 	bool		outeropsset;
 	bool		inneropsset;
 	bool		resultopsset;
+
+#ifdef J3VM_CHSTAT
+	/* to measure the latency of each plan node */
+	int64_t totaltime;
+	struct timespec starttime;
+	struct timespec endtime;
+#endif /* J3VM_CHSTAT */
 } PlanState;
 
 /* ----------------

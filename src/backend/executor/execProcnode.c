@@ -397,6 +397,12 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 	if (estate->es_instrument)
 		result->instrument = InstrAlloc(1, estate->es_instrument);
 
+#ifdef J3VM_CHSTAT
+	result->totaltime = 0;
+	memset(&result->starttime, 0, sizeof(struct timespec));
+	memset(&result->endtime, 0, sizeof(struct timespec));
+#endif /* J3VM_CHSTAT */
+
 	return result;
 }
 
@@ -484,6 +490,10 @@ ExecProcNodeInstr(PlanState *node)
  * function must provide its own instrumentation support.
  * ----------------------------------------------------------------
  */
+#ifdef J3VM_CHSTAT
+extern bool j3vm_stat_is_olap;
+extern int j3vm_stat_call_depth;
+#endif /* J3VM_CHSTAT */
 Node *
 MultiExecProcNode(PlanState *node)
 {
@@ -492,6 +502,19 @@ MultiExecProcNode(PlanState *node)
 	check_stack_depth();
 
 	CHECK_FOR_INTERRUPTS();
+
+#ifdef J3VM_CHSTAT
+	if (j3vm_stat_is_olap)
+	{
+		/* Start time of the query plan node */
+		struct timespec starttime;
+		clock_gettime(CLOCK_MONOTONIC, &starttime);
+		node->starttime = starttime;
+
+		j3vm_stat_call_depth++;
+	}
+#endif /* J3VM_CHSTAT */
+
 
 	if (node->chgParam != NULL) /* something changed */
 		ExecReScan(node);		/* let ReScan handle this */
@@ -523,6 +546,23 @@ MultiExecProcNode(PlanState *node)
 			result = NULL;
 			break;
 	}
+
+#ifdef J3VM_CHSTAT
+	if (j3vm_stat_is_olap)
+	{
+		j3vm_stat_call_depth--;
+
+		/* End time of the query plan node */
+		struct timespec endtime;
+		clock_gettime(CLOCK_MONOTONIC, &endtime);
+
+		node->endtime = endtime;
+
+		node->totaltime = node->totaltime
+				+ (node->endtime.tv_sec - node->starttime.tv_sec) * 1000000000
+				+ (node->endtime.tv_nsec - node->starttime.tv_nsec);
+	}
+#endif /* J3VM_CHSTAT */
 
 	return result;
 }

@@ -1272,22 +1272,27 @@ PLeafNeedsNewGeneration(void)
 {
   bool ret;
   uint64 num_versions;
-  PLeafGenNumber gen_no;
-  int pool_index;
+  //PLeafGenNumber gen_no;
+  //int pool_index;
   PLeafPageId max_page_id;
   double fraction;
 
   num_versions = pg_atomic_read_u64(&EbiTreeShmem->num_versions);
 
-  gen_no = PLeafGetLatestGenerationNumber();
-	pool_index = PLeafGetPoolIndex(gen_no);
-  max_page_id = PLeafMetadata->pleafmeta.max_page_ids[pool_index];
+  //gen_no = PLeafGetLatestGenerationNumber();
+  //pool_index = PLeafGetPoolIndex(gen_no);
+  //max_page_id = PLeafMetadata->pleafmeta.max_page_ids[pool_index];
+  max_page_id = PLeafMetadata->pleafmeta.max_page_ids[LEFT_POOL] +
+  	PLeafMetadata->pleafmeta.max_page_ids[RIGHT_POOL];
 
   if (max_page_id == 0)
 	  return false;
 
   fraction = ((double) num_versions) / (max_page_id * PLEAF_MAX_CAPACITY);
   ret = (fraction > PLEAF_GENERATION_THRESHOLD);
+
+  if (num_versions == 0)
+	  return true;
 
   ereport(LOG, (errmsg("@@ PLeafNeedsNewGeneration, fraction: %lf, num_versions: %lu, max_page_id: %u", fraction, num_versions, max_page_id)));
 

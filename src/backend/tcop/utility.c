@@ -537,6 +537,10 @@ ProcessUtility(PlannedStmt *pstmt,
  * example, because we might need to refresh the event trigger cache,
  * which requires being in a valid transaction.
  */
+#ifdef J3VM_CHSTAT
+uint64_t j3vm_stat_cnt_neword = 0;
+uint64_t j3vm_stat_print_sec = 0;
+#endif /*J3VM_CHSTAT */
 void
 standard_ProcessUtility(PlannedStmt *pstmt,
 						const char *queryString,
@@ -551,6 +555,30 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 	bool		isAtomicContext = (!(context == PROCESS_UTILITY_TOPLEVEL || context == PROCESS_UTILITY_QUERY_NONATOMIC) || IsTransactionBlock());
 	ParseState *pstate;
 	int			readonly_flags;
+
+#ifdef J3VM_CHSTAT
+	/* Measure the number of NEW ORDER transactions per second */
+	if (strncmp(queryString, "call neword", 11) == 0)
+	{
+		j3vm_stat_cnt_neword++;
+
+		struct timespec curr;
+		clock_gettime(CLOCK_MONOTONIC, &curr);
+		if (j3vm_stat_print_sec < curr.tv_sec)
+		{
+			j3vm_stat_print_sec = curr.tv_sec;
+			
+			char filename[256];
+			sprintf(filename, "tps.%d", getpid());
+			FILE* fp = fopen(filename, "a");
+			fprintf(fp, "%lu %lu\n", j3vm_stat_print_sec, j3vm_stat_cnt_neword);
+			fclose(fp);
+
+			j3vm_stat_cnt_neword = 0;
+		}
+	}
+#endif /* J3VM_CHSTAT */
+
 
 	/* This can recurse, so check for excessive recursion */
 	check_stack_depth();

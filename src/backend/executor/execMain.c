@@ -297,15 +297,100 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
  *
  * ----------------------------------------------------------------
  */
+#ifdef J3VM_CHSTAT
+bool j3vm_stat_is_olap;
+int j3vm_stat_call_depth;
+#endif /* J3VM_CHSTAT */
 void
 ExecutorRun(QueryDesc *queryDesc,
 			ScanDirection direction, uint64 count,
 			bool execute_once)
 {
+#ifdef J3VM_CHSTAT
+    struct timespec start, end;
+
+	/* Distinguish OLAP queries */
+	if (queryDesc->sourceText[1] == '-' &&
+		queryDesc->sourceText[2] == '-' &&
+		queryDesc->sourceText[4] == 'Q')
+	{
+		/* Start time of the OLAP query */
+        clock_gettime(CLOCK_MONOTONIC, &start);
+		j3vm_stat_is_olap = true;
+		j3vm_stat_call_depth = 0;
+	}
+	else
+	{
+		j3vm_stat_is_olap = false;
+	}
+#endif /* J3VM_CHSTAT */
+
 	if (ExecutorRun_hook)
 		(*ExecutorRun_hook) (queryDesc, direction, count, execute_once);
 	else
 		standard_ExecutorRun(queryDesc, direction, count, execute_once);
+
+#ifdef J3VM_CHSTAT
+	/* Distinguish OLAP queries */
+	if (queryDesc->sourceText[1] == '-' &&
+		queryDesc->sourceText[2] == '-' &&
+		queryDesc->sourceText[4] == 'Q')
+	{
+		/* End time of the OLAP query */
+        clock_gettime(CLOCK_MONOTONIC, &end);
+
+		/* Write query latency */
+		int filenum = (start.tv_sec % 10000) * 100000 + getpid();
+		char filename[256];
+		sprintf(filename, "chstat.%d", filenum);
+		FILE* fp = fopen(filename, "a");
+		fprintf(fp, "[%s]\nstart: %lld latency: %lld\n",
+                queryDesc->sourceText,
+                start.tv_sec * 1000000000 + start.tv_nsec,
+                (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec)
+        );
+
+		/* Write query plan tree information */
+        struct PlanState* plan_stack[1024];
+        int depth_stack[1024];
+        int plan_stack_top = 0;
+
+        plan_stack[plan_stack_top] = queryDesc->planstate;
+        depth_stack[plan_stack_top] = 0;
+		plan_stack_top++;
+
+		/* DFS in query plan tree */
+        while (1)
+		{
+			if (plan_stack_top == 0) break;
+
+			plan_stack_top--;
+			
+			struct PlanState* curr = plan_stack[plan_stack_top];
+			int depth = depth_stack[plan_stack_top];
+			
+			fprintf(fp, "[queryplan] %d %d %ld\n",
+					depth,
+					curr->type,
+					curr->totaltime);
+		
+			if (curr->righttree)
+			{
+				plan_stack[plan_stack_top] = curr->righttree;
+				depth_stack[plan_stack_top] = depth + 1;
+				plan_stack_top++;
+			}
+			if (curr->lefttree)
+			{
+				plan_stack[plan_stack_top] = curr->lefttree;
+				depth_stack[plan_stack_top] = depth + 1;
+				plan_stack_top++;
+			}
+		}
+		fclose(fp);
+	}
+	j3vm_stat_is_olap = false;
+#endif /* J3VM_CHSTAT */
 }
 
 void

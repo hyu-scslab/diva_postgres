@@ -3884,7 +3884,19 @@ heap_update_with_vc(Relation relation, ItemPointer otid, HeapTuple newtup,
 	bool      is_second_old_exist;
 	bool            is_repeated_update;
 
-	Assert(ItemPointerIsValid(otid));
+	bool is_sleep = false;
+	if (!ItemPointerIsValid(otid))
+	{
+		ereport(LOG, (errmsg("@@@@@ !ItemPointerIsValid(otid)")));
+
+		is_sleep = true;
+		sleep(5000);
+	}
+	if (is_sleep)
+	{
+		sleep(5000);
+	}
+	//Assert(ItemPointerIsValid(otid));
 
 	/*
 	 * Forbid this during a parallel operation, lest it allocate a combocid.

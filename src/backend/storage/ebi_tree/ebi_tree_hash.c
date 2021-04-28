@@ -26,14 +26,15 @@
 #include "storage/ebi_tree_buf.h"
 #include "storage/ebi_tree_hash.h"
 
-typedef struct {
-  EbiTreeBufTag key; /* Tag of a disk page */
-  int id;            /* Associated buffer id */
+typedef struct
+{
+	EbiTreeBufTag key; /* Tag of a disk page */
+	int id;            /* Associated buffer id */
 } EbiTreeLookupEnt;
 
-StaticAssertDecl(
-    sizeof(EbiTreeLookupEnt) == (sizeof(EbiTreeBufTag) + sizeof(int)),
-    "EbiTree Lookup Entry");
+StaticAssertDecl(sizeof(EbiTreeLookupEnt) ==
+					 (sizeof(EbiTreeBufTag) + sizeof(int)),
+				 "EbiTree Lookup Entry");
 
 static HTAB *SharedEbiTreeHash;
 
@@ -43,8 +44,9 @@ static HTAB *SharedEbiTreeHash;
  * compute the size of shared memory for ebi_tree hash
  */
 Size
-EbiTreeHashShmemSize(int size) {
-  return hash_estimate_size(size, sizeof(EbiTreeLookupEnt));
+EbiTreeHashShmemSize(int size)
+{
+	return hash_estimate_size(size, sizeof(EbiTreeLookupEnt));
 }
 
 /*
@@ -53,24 +55,24 @@ EbiTreeHashShmemSize(int size) {
  * Initialize ebi_tree hash in shared memory
  */
 void
-EbiTreeHashInit(int size) {
-  HASHCTL info;
-  long num_partitions;
+EbiTreeHashInit(int size)
+{
+	HASHCTL info;
+	long num_partitions;
 
-  /* See next_pow2_long(long num) in dynahash.c */
-  num_partitions = 1L << my_log2(NUM_EBI_TREE_PARTITIONS);
+	/* See next_pow2_long(long num) in dynahash.c */
+	num_partitions = 1L << my_log2(NUM_EBI_TREE_PARTITIONS);
 
-  /* EbiTreeBufTag maps to EbiTreeHash */
-  info.keysize = sizeof(EbiTreeBufTag);
-  info.entrysize = sizeof(EbiTreeLookupEnt);
-  info.num_partitions = num_partitions;
+	/* EbiTreeBufTag maps to EbiTreeHash */
+	info.keysize = sizeof(EbiTreeBufTag);
+	info.entrysize = sizeof(EbiTreeLookupEnt);
+	info.num_partitions = num_partitions;
 
-  SharedEbiTreeHash = ShmemInitHash(
-      "Shared EbiTree Lookup Table",
-      size,
-      size,
-      &info,
-      HASH_ELEM | HASH_BLOBS | HASH_PARTITION);
+	SharedEbiTreeHash = ShmemInitHash("Shared EbiTree Lookup Table",
+									  size,
+									  size,
+									  &info,
+									  HASH_ELEM | HASH_BLOBS | HASH_PARTITION);
 }
 
 /*
@@ -83,8 +85,9 @@ EbiTreeHashInit(int size) {
  * do the hash computation twice (hash_any is a bit slow).
  */
 uint32
-EbiTreeHashCode(const EbiTreeBufTag *tagPtr) {
-  return get_hash_value(SharedEbiTreeHash, (void *)tagPtr);
+EbiTreeHashCode(const EbiTreeBufTag *tagPtr)
+{
+	return get_hash_value(SharedEbiTreeHash, (void *)tagPtr);
 }
 
 /*
@@ -95,15 +98,16 @@ EbiTreeHashCode(const EbiTreeBufTag *tagPtr) {
  * partition
  */
 int
-EbiTreeHashLookup(const EbiTreeBufTag *tagPtr, uint32 hashcode) {
-  EbiTreeLookupEnt *result;
+EbiTreeHashLookup(const EbiTreeBufTag *tagPtr, uint32 hashcode)
+{
+	EbiTreeLookupEnt *result;
 
-  result = (EbiTreeLookupEnt *)hash_search_with_hash_value(
-      SharedEbiTreeHash, (void *)tagPtr, hashcode, HASH_FIND, NULL);
+	result = (EbiTreeLookupEnt *)hash_search_with_hash_value(
+		SharedEbiTreeHash, (void *)tagPtr, hashcode, HASH_FIND, NULL);
 
-  if (!result) return -1;
+	if (!result) return -1;
 
-  return result->id;
+	return result->id;
 }
 
 /*
@@ -118,20 +122,21 @@ EbiTreeHashLookup(const EbiTreeBufTag *tagPtr, uint32 hashcode) {
  * Caller must hold exclusive lock on EbiTreeMappingLock for tag's partition
  */
 int
-EbiTreeHashInsert(const EbiTreeBufTag *tagPtr, uint32 hashcode, int buffer_id) {
-  EbiTreeLookupEnt *result;
-  bool found;
+EbiTreeHashInsert(const EbiTreeBufTag *tagPtr, uint32 hashcode, int buffer_id)
+{
+	EbiTreeLookupEnt *result;
+	bool found;
 
-  Assert(buffer_id >= 0); /* -1 is reserved for not-in-table */
+	Assert(buffer_id >= 0); /* -1 is reserved for not-in-table */
 
-  result = (EbiTreeLookupEnt *)hash_search_with_hash_value(
-      SharedEbiTreeHash, (void *)tagPtr, hashcode, HASH_ENTER, &found);
+	result = (EbiTreeLookupEnt *)hash_search_with_hash_value(
+		SharedEbiTreeHash, (void *)tagPtr, hashcode, HASH_ENTER, &found);
 
-  if (found) /* found something already in the hash table */
-    return result->id;
+	if (found) /* found something already in the hash table */
+		return result->id;
 
-  result->id = buffer_id;
-  return -1;
+	result->id = buffer_id;
+	return -1;
 }
 
 /*
@@ -142,13 +147,14 @@ EbiTreeHashInsert(const EbiTreeBufTag *tagPtr, uint32 hashcode, int buffer_id) {
  * Caller must hold exclusive lock on EbiTreeMappingLock for tag's partition
  */
 void
-EbiTreeHashDelete(const EbiTreeBufTag *tagPtr, uint32 hashcode) {
-  EbiTreeLookupEnt *result;
+EbiTreeHashDelete(const EbiTreeBufTag *tagPtr, uint32 hashcode)
+{
+	EbiTreeLookupEnt *result;
 
-  result = (EbiTreeLookupEnt *)hash_search_with_hash_value(
-      SharedEbiTreeHash, (void *)tagPtr, hashcode, HASH_REMOVE, NULL);
+	result = (EbiTreeLookupEnt *)hash_search_with_hash_value(
+		SharedEbiTreeHash, (void *)tagPtr, hashcode, HASH_REMOVE, NULL);
 
-  if (!result) elog(ERROR, "shared ebi_tree hash table corrupted");
+	if (!result) elog(ERROR, "shared ebi_tree hash table corrupted");
 }
 
 #endif /* J3VM */

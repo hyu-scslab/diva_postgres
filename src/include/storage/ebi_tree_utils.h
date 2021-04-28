@@ -26,8 +26,9 @@
 extern dsa_pointer EbiInitMpscQueue(dsa_area* area);
 extern void EbiDeleteMpscQueue(dsa_area* area, dsa_pointer dsa_queue);
 extern bool EbiMpscQueueIsEmpty(dsa_area* area, dsa_pointer dsa_queue);
-extern void
-EbiMpscEnqueue(dsa_area* area, dsa_pointer dsa_queue, dsa_pointer dsa_node);
+extern void EbiMpscEnqueue(dsa_area* area,
+						   dsa_pointer dsa_queue,
+						   dsa_pointer dsa_node);
 extern dsa_pointer EbiMpscDequeue(dsa_area* area, dsa_pointer dsa_queue);
 extern void EbiPrintMpscQueue(dsa_area* area, dsa_pointer dsa_queue);
 
@@ -38,8 +39,9 @@ extern void EbiPrintMpscQueue(dsa_area* area, dsa_pointer dsa_queue);
 extern EbiSpscQueue EbiInitSpscQueue(void);
 extern void EbiDeleteSpscQueue(EbiSpscQueue queue);
 extern bool EbiSpscQueueIsEmpty(EbiSpscQueue queue);
-extern void
-EbiSpscEnqueue(EbiSpscQueue queue, EbiNode node, dsa_pointer dsa_ptr);
+extern void EbiSpscEnqueue(EbiSpscQueue queue,
+						   EbiNode node,
+						   dsa_pointer dsa_ptr);
 extern EbiNode EbiSpscDequeue(EbiSpscQueue queue);
 extern EbiNode EbiSpscQueueFront(EbiSpscQueue queue);
 extern dsa_pointer EbiSpscQueueFrontDsaPointer(EbiSpscQueue queue);

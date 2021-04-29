@@ -2770,6 +2770,10 @@ AbortTransaction(void)
 		AtEOXact_ApplyLauncher(false);
 		pgstat_report_xact_timestamp(0);
 	}
+#ifdef J3VM
+	UnbindTransaction();
+	s->ebiNode = InvalidDsaPointer;
+#endif
 
 	/*
 	 * State remains TRANS_ABORT until CleanupTransaction().

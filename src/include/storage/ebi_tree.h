@@ -41,6 +41,7 @@ typedef struct EbiNodeData
 	dsa_pointer left;
 	dsa_pointer right;
 	dsa_pointer proxy_target;
+	dsa_pointer proxy_list_tail; /* tail pointer used for appending */
 
 	uint32 height;
 	pg_atomic_uint32 refcnt;

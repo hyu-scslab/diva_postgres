@@ -135,6 +135,7 @@ EbiCreateNodeWithHeight(dsa_area* area, uint32 height)
 	node->left = InvalidDsaPointer;
 	node->right = InvalidDsaPointer;
 	node->proxy_target = InvalidDsaPointer;
+	node->proxy_list_tail = pointer;
 	node->height = height;
 	pg_atomic_init_u32(&node->refcnt, 0);
 	node->left_boundary = InvalidDsaPointer;
@@ -214,7 +215,7 @@ EbiInsertNode(dsa_pointer dsa_ebitree)
 	 * target ebi_node and set its right to the newly inserted node
 	 *
 	 *   new_parent
-	 *	/	   \
+	 *	  /	     \
 	 * target  new_leaf
 	 *
 	 */
@@ -237,11 +238,11 @@ EbiInsertNode(dsa_pointer dsa_ebitree)
 	 * In the figure below, connecting nodes 'a' and 'f'.
 	 * (e = target, f = new_parent, g = new_leaf)
 	 *
-	 *	 a					 a
-	 *	/ \					/ \
+	 *	   a				 a
+	 *	  / \				/ \
 	 *   b   \	   ->	   b   f
-	 *  / \	\			  / \ / \
-	 * c	 d	 e			 c	d e  g
+	 *  / \   \			  / \ / \
+	 * c   d   e	     c	d e  g
 	 *
 	 */
 	if (EbiHasParent(target))
@@ -661,17 +662,20 @@ EbiCompactNode(EbiTree ebitree, dsa_pointer dsa_node)
 static void
 EbiLinkProxy(dsa_pointer dsa_proxy, dsa_pointer dsa_proxy_target)
 {
-	EbiNode proxy, new_proxy_target;
+	EbiNode proxy_node, proxy_target_node, tail;
+	dsa_pointer tmp;
 
-	proxy = EbiConvertToNode(ebitree_dsa_area, dsa_proxy);
+	proxy_node = EbiConvertToNode(ebitree_dsa_area, dsa_proxy);
+	tail = EbiConvertToNode(ebitree_dsa_area, proxy_node->proxy_list_tail);
 
-	if (DsaPointerIsValid(proxy->proxy_target))
-	{
-		new_proxy_target = EbiConvertToNode(ebitree_dsa_area, dsa_proxy_target);
-		new_proxy_target->proxy_target = proxy->proxy_target;
-	}
+	Assert(!DsaPointerIsValid(tail->proxy_target));
 
-	proxy->proxy_target = dsa_proxy_target;
+	/* Connect the proxy_target node's list with the proxy node's list */
+	tail->proxy_target = dsa_proxy_target;
+
+	/* Set the proxy node's tail to the appended list's end */
+	proxy_target_node = EbiConvertToNode(ebitree_dsa_area, dsa_proxy_target);
+	proxy_node->proxy_list_tail = proxy_target_node->proxy_list_tail;
 }
 
 void

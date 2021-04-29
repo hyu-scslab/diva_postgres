@@ -603,6 +603,7 @@ EbiLinkProxy(dsa_pointer dsa_proxy, dsa_pointer dsa_proxy_target) {
 
   if (DsaPointerIsValid(proxy->proxy_target)) {
     new_proxy_target = EbiConvertToNode(ebitree_dsa_area, dsa_proxy_target);
+	Assert(!DsaPointerIsValid(new_proxy_target->proxy_target));
     new_proxy_target->proxy_target = proxy->proxy_target;
   }
 

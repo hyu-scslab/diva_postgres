@@ -1750,6 +1750,12 @@
   proparallel => 'r', prorettype => 'text', proargtypes => '',
   prosrc => 'current_query' },
 
+# J3VM
+{ oid => '815', descr => 'print ebi tree',
+  proname => 'ebi_tree_print', proisstrict => 'f', provolatile => 'v',
+  proparallel => 'r', prorettype => 'text', proargtypes => '',
+  prosrc => 'ebi_tree_print' },
+
 { oid => '3399',
   proname => 'int8_mul_cash', prorettype => 'money',
   proargtypes => 'int8 money', prosrc => 'int8_mul_cash' },

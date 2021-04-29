@@ -102,9 +102,10 @@ EbiMpscEnqueue(dsa_area* area, dsa_pointer dsa_queue, dsa_pointer dsa_node) {
   dsa_new_rear = EbiAllocMpscQueueNode(area, dsa_node);
 
   success = false;
-  expected = InvalidDsaPointer;
 
   while (!success) {
+    expected = InvalidDsaPointer;
+
     dsa_rear = queue->rear;
 
     rear = (EbiMpscQueueNode)dsa_get_address(area, dsa_rear);

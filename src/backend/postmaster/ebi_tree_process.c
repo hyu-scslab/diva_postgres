@@ -51,12 +51,12 @@
 #include "utils/timeout.h"
 
 int EbiGenerationMultiplier = 3; /* constant */
-int EbiGenerationDelay = 10;     /* seconds */
+int EbiGenerationDelay = 2;     /* seconds */
 
 /*
  * GUC parameters
  */
-int EbiTreeDelay = 200 * 10; /* milli-seconds */
+int EbiTreeDelay = 100; /* milli-seconds */
 
 EbiTreeShmemStruct *EbiTreeShmem = NULL;
 

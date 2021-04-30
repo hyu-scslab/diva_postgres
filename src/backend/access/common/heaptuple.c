@@ -368,8 +368,12 @@ heap_fill_tuple(TupleDesc tupleDesc,
 #endif /* J3Vm */
 	}
 
+#ifdef J3VM
 	if (!has_null)
 		Assert((data - start) == data_size);
+#else
+	Assert((data - start) == data_size);
+#endif /* J3Vm */
 }
 
 

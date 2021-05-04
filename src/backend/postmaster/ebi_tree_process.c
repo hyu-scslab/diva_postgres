@@ -356,7 +356,8 @@ EbiTreeShmemInit(void)
 	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
 	EbiTreeShmem =
-		(EbiTreeShmemStruct *)ShmemInitStruct("EBI Tree Data", size, &found);
+		(EbiTreeShmemStruct *)ShmemInitStruct(
+				"EBI Tree Data", sizeof(EbiTreeShmemStruct), &found);
 
 	if (!found)
 	{

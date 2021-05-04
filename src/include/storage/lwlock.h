@@ -119,12 +119,12 @@ extern PGDLLIMPORT int NamedLWLockTrancheRequests;
 #define NUM_PLEAF_PARTITIONS (1024)
 #endif /* PLEAF_NUM_PAGE */
 
-#ifdef EBI_TREE_NUM_PAGE
+#ifdef EBI_NUM_PAGE
 #define NUM_EBI_TREE_PARTITIONS 128
 #else
 /* Default number of ebi buffer partitions */
 #define NUM_EBI_TREE_PARTITIONS (1024)
-#endif /* PLEAF_NUM_PAGE */
+#endif /* EBI_NUM_PAGE */
 #endif /* J3VM */
 
 /* Number of partitions the shared lock tables are divided into */

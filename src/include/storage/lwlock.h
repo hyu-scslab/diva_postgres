@@ -113,14 +113,14 @@ extern PGDLLIMPORT int NamedLWLockTrancheRequests;
 
 #ifdef J3VM
 #ifdef PLEAF_NUM_PAGE
-#define NUM_PLEAF_PARTITIONS (PLEAF_NUM_PAGE / 10)
+#define NUM_PLEAF_PARTITIONS 128
 #else
 /* Default number of pleaf buffer partitions */
 #define NUM_PLEAF_PARTITIONS (1024)
 #endif /* PLEAF_NUM_PAGE */
 
 #ifdef EBI_TREE_NUM_PAGE
-#define NUM_EBI_TREE_PARTITIONS (EBI_TREE_NUM_PAGE / 10)
+#define NUM_EBI_TREE_PARTITIONS 128
 #else
 /* Default number of ebi buffer partitions */
 #define NUM_EBI_TREE_PARTITIONS (1024)

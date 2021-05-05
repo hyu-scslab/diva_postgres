@@ -125,8 +125,12 @@ heap_page_prune_opt(Relation relation, Buffer buffer)
 	 * Forget it if page is not hinted to contain something prunable that's
 	 * older than OldestXmin.
 	 */
+#ifdef J3VM
+	/* Keep on through the below code to mark the hint bits of tuples */
+#else
 	if (!PageIsPrunable(page, OldestXmin))
 		return;
+#endif
 
 	/*
 	 * We prune when a previous UPDATE failed to find enough space on the page
@@ -397,12 +401,14 @@ heap_prune_oviraptor(Relation relation, Buffer buffer, OffsetNumber offnum,
 	}
 
 	/* We only do if this tuple is leftside of oviraptor. */
-	if (LP_OVR_IS_RIGHT(lp) || LP_IS_PLEAF_FLAG(lp)) // is left oviraptor?
-	{
-		return ndeleted;
-	}
+//	if (LP_OVR_IS_RIGHT(lp) || LP_IS_PLEAF_FLAG(lp)) // is left oviraptor?
+//	{
+//		return ndeleted;
+//	}
 
-	Assert(LP_OVR_IS_LEFT(lp));
+//	Assert(LP_OVR_IS_LEFT(lp));
+	if (LP_IS_PLEAF_FLAG(lp))
+		return ndeleted;
 
 	if (LP_OVR_IS_USING(lp))
 	{
@@ -435,17 +441,8 @@ heap_prune_oviraptor(Relation relation, Buffer buffer, OffsetNumber offnum,
 				return ndeleted;
 				break;
 		}
-
-		/* Visibility check. */
-    // TODO(EBI): if (Sift(xmin, xmax) != null)
-		if (true)
-		//if (!RecIsInDeadZone(HeapTupleHeaderGetRawXmin(htup),
-		//			HeapTupleHeaderGetRawXmax(htup)))
-		{
-			/* It is visible by other transactions. */
-			return ndeleted;
-		}
 	}
+	return ndeleted;
 
 	/* Left one is done. Let's do this for right one. */
 

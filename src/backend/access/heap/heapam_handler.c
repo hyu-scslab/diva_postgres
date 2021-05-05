@@ -133,6 +133,7 @@ heapam_index_fetch_tuple(struct IndexFetchTableData *scan,
 	{
 		/* Switch to correct buffer if we don't have it already */
 #ifdef J3VM
+		Buffer		prev_buf = hscan->xs_cbuf;
 #else
 		Buffer		prev_buf = hscan->xs_cbuf;
 #endif
@@ -145,6 +146,8 @@ heapam_index_fetch_tuple(struct IndexFetchTableData *scan,
 		 * Prune page, but only if we weren't already on this page
 		 */
 #ifdef J3VM
+		if (prev_buf != hscan->xs_cbuf)
+			heap_page_prune_opt(hscan->xs_base.rel, hscan->xs_cbuf);
 #else
 		if (prev_buf != hscan->xs_cbuf)
 			heap_page_prune_opt(hscan->xs_base.rel, hscan->xs_cbuf);
@@ -2252,6 +2255,7 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 	 * Prune and repair fragmentation for the whole page, if possible.
 	 */
 #ifdef J3VM
+	heap_page_prune_opt(scan->rs_rd, buffer);
 #else
 	heap_page_prune_opt(scan->rs_rd, buffer);
 #endif

@@ -4439,6 +4439,8 @@ l2:
 	/* NO EREPORT(ERROR) from here till changes are logged */
 	START_CRIT_SECTION();
 
+	PageSetPrunable(page, xid);
+
 	/* Make sure tuples are correctly marked as not-HOT */
 	HeapTupleClearHotUpdated(&oldtup);
 	HeapTupleClearHeapOnly(heaptup);

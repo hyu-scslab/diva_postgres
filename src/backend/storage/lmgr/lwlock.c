@@ -546,16 +546,23 @@ InitializeLWLocks(void)
 	lock = MainLWLockArray + NUM_INDIVIDUAL_LWLOCKS + NUM_BUFFER_PARTITIONS;
 	for (id = 0; id < NUM_PLEAF_PARTITIONS; id++, lock++)
 		LWLockInitialize(&lock->lock, LWTRANCHE_PLEAF_MAPPING);
+
+	/* Initialize ebi-tree mapping LWLocks in main array */
+	lock = MainLWLockArray + NUM_INDIVIDUAL_LWLOCKS +
+		NUM_BUFFER_PARTITIONS + NUM_PLEAF_PARTITIONS;
+	for (id = 0; id < NUM_EBI_TREE_PARTITIONS; id++, lock++)
+		LWLockInitialize(&lock->lock, LWTRANCHE_EBI_TREE_MAPPING);
 	
 	/* Initialize lmgrs' LWLocks in main array */
 	lock = MainLWLockArray + NUM_INDIVIDUAL_LWLOCKS + 
-		NUM_BUFFER_PARTITIONS + NUM_PLEAF_PARTITIONS;
+		NUM_BUFFER_PARTITIONS + NUM_PLEAF_PARTITIONS + NUM_EBI_TREE_PARTITIONS;
 	for (id = 0; id < NUM_LOCK_PARTITIONS; id++, lock++)
 		LWLockInitialize(&lock->lock, LWTRANCHE_LOCK_MANAGER);
 
 	/* Initialize predicate lmgrs' LWLocks in main array */
 	lock = MainLWLockArray + NUM_INDIVIDUAL_LWLOCKS +
-		NUM_BUFFER_PARTITIONS + NUM_PLEAF_PARTITIONS + NUM_LOCK_PARTITIONS;
+		NUM_BUFFER_PARTITIONS + NUM_PLEAF_PARTITIONS + NUM_EBI_TREE_PARTITIONS +
+		NUM_LOCK_PARTITIONS;
 	for (id = 0; id < NUM_PREDICATELOCK_PARTITIONS; id++, lock++)
 		LWLockInitialize(&lock->lock, LWTRANCHE_PREDICATE_LOCK_MANAGER);
 #else

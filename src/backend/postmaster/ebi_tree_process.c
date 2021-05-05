@@ -50,7 +50,7 @@
 #include "utils/resowner.h"
 #include "utils/timeout.h"
 
-int EbiGenerationMultiplier = 3; /* constant */
+int EbiGenerationMultiplier = 1; /* constant */
 int EbiGenerationDelay = 2;     /* seconds */
 
 /*

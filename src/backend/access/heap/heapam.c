@@ -4607,6 +4607,15 @@ l2:
 	}
 
 	{
+		static bool is_first = true;
+		if (is_first)
+		{
+			EbiMarkTupleSize(oldtup.t_len);
+			is_first = false;
+		}
+	}
+
+	{
 		int xmin;
 		//int xmax;
 		xmin = HeapTupleHeaderGetRawXmin(oldtup.t_data);

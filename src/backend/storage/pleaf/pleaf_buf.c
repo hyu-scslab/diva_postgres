@@ -1293,4 +1293,28 @@ PLeafNeedsNewGeneration(void)
   return ret;
 }
 
+void
+PLeafMonitorVersionSpace(void)
+{
+	PLeafPageId max_page_id;
+	uint64 num_versions;
+	Size tuple_size;
+
+	if (!EbiTreeShmem->version_usage_check_flag)
+		return;
+
+	tuple_size = EbiTreeShmem->sampled_tuple_size;
+
+	if (tuple_size == 0)
+		return;
+
+	max_page_id = PLeafMetadata->pleafmeta.max_page_ids[LEFT_POOL]
+		+ PLeafMetadata->pleafmeta.max_page_ids[RIGHT_POOL];
+	num_versions = pg_atomic_read_u64(&EbiTreeShmem->num_versions);
+
+	ereport(LOG,
+			errmsg("[OURS] %zu %ld",
+			max_page_id * PLEAF_PAGE_SIZE, num_versions * tuple_size));
+}
+
 #endif

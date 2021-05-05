@@ -33,6 +33,9 @@
 #include "storage/shmem.h"
 #include "utils/dynahash.h"
 
+/* Check both globals.c and miscadmin.h */
+extern PGDLLIMPORT int NEbiTreeBuffers;
+
 EbiTreeBufDescPadded *EbiTreeBufDescriptors;
 char *EbiTreeBufBlocks;
 EbiTreeBufMeta *EbiTreeBuf;
@@ -41,7 +44,7 @@ EbiTreeBufMeta *EbiTreeBuf;
 
 /* Private functions */
 static int EbiTreeBufGetBufRef(EbiTreeSegmentId seg_id,
-							   EbiTreeSegmentOffset seg_offset);
+		EbiTreeSegmentOffset seg_offset);
 
 /* Segment control */
 static int EbiTreeOpenSegmentFile(EbiTreeSegmentId seg_id);
@@ -67,8 +70,8 @@ EbiTreeBufShmemSize(void)
 	size = add_size(size, mul_size(NEbiTreeBuffers, EBI_TREE_SEG_PAGESZ));
 
 	/* EBI tree buffer hash */
-	size = add_size(
-		size, EbiTreeHashShmemSize(NEbiTreeBuffers + NUM_EBI_TREE_PARTITIONS));
+	size = add_size(size,
+			EbiTreeHashShmemSize(NEbiTreeBuffers + NUM_EBI_TREE_PARTITIONS));
 
 	/* EBI tree buffer metadata */
 	size = add_size(size, sizeof(EbiTreeBufMeta));
@@ -84,15 +87,15 @@ EbiTreeBufInit(void)
 
 	/* Align descriptors to a cacheline boundary */
 	EbiTreeBufDescriptors = (EbiTreeBufDescPadded *)ShmemInitStruct(
-		"EBI-tree Buffer Descriptors",
-		NEbiTreeBuffers * sizeof(EbiTreeBufDescPadded),
-		&foundDescs);
+			"EBI-tree Buffer Descriptors",
+			NEbiTreeBuffers * sizeof(EbiTreeBufDescPadded),
+			&foundDescs);
 
 	/* Buffer blocks */
 	EbiTreeBufBlocks =
 		(char *)ShmemInitStruct("EBI-tree Buffer Blocks",
-								NEbiTreeBuffers * ((Size)(EBI_TREE_SEG_PAGESZ)),
-								&foundBufs);
+				NEbiTreeBuffers * ((Size)(EBI_TREE_SEG_PAGESZ)),
+				&foundBufs);
 
 	EbiTreeHashInit(NEbiTreeBuffers + NUM_EBI_TREE_PARTITIONS);
 
@@ -108,15 +111,15 @@ EbiTreeBufInit(void)
 
 	/* Initialize metadata */
 	EbiTreeBuf = (EbiTreeBufMeta *)ShmemInitStruct(
-		"EBI-tree Buffer Metadata", sizeof(EbiTreeBufMeta), &foundMeta);
+			"EBI-tree Buffer Metadata", sizeof(EbiTreeBufMeta), &foundMeta);
 }
 
 void
 EbiTreeAppendVersion(EbiTreeSegmentId seg_id,
-					 EbiTreeSegmentOffset seg_offset,
-					 Size tuple_size,
-					 const void *tuple,
-					 LWLock *rwlock)
+		EbiTreeSegmentOffset seg_offset,
+		Size tuple_size,
+		const void *tuple,
+		LWLock *rwlock)
 {
 	int buf_id;
 	EbiTreeBufDesc *buf;
@@ -130,8 +133,8 @@ EbiTreeAppendVersion(EbiTreeSegmentId seg_id,
 
 	/* Copy the tuple into the cache */
 	memcpy(&EbiTreeBufBlocks[buf_id * EBI_TREE_SEG_PAGESZ + page_offset],
-		   tuple,
-		   tuple_size);
+			tuple,
+			tuple_size);
 
 	aligned_tuple_size = 1 << my_log2(tuple_size);
 
@@ -148,9 +151,9 @@ EbiTreeAppendVersion(EbiTreeSegmentId seg_id,
 
 int
 EbiTreeReadVersionRef(EbiTreeSegmentId seg_id,
-					  EbiTreeSegmentOffset seg_offset,
-					  Size tuple_size,
-					  void **ret_value)
+		EbiTreeSegmentOffset seg_offset,
+		Size tuple_size,
+		void **ret_value)
 {
 	int buf_id;
 	int page_offset;
@@ -207,14 +210,6 @@ EbiTreeBufGetBufRef(EbiTreeSegmentId seg_id, EbiTreeSegmentOffset seg_offset)
 		pg_atomic_fetch_add_u32(&buf->refcnt, 1);
 		LWLockRelease(new_partition_lock);
 
-		/*
-		ereport(
-			LOG,
-			(errmsg(
-				"READING BUFFER seg_id: %d, page_id: %d",
-				tag.seg_id,
-				tag.page_id)));
-				*/
 		return buf_id;
 	}
 
@@ -236,21 +231,13 @@ EbiTreeBufGetBufRef(EbiTreeSegmentId seg_id, EbiTreeSegmentOffset seg_offset)
 		pg_atomic_fetch_add_u32(&buf->refcnt, 1);
 		LWLockRelease(new_partition_lock);
 
-		/*
-		ereport(
-			LOG,
-			(errmsg(
-				"READING BUFFER seg_id: %d, page_id: %d",
-				tag.seg_id,
-				tag.page_id)));
-				*/
 		return buf_id;
 	}
 
 find_cand:
 	/* Pick up a candidate cache entry for a new allocation */
 	candidate_id = pg_atomic_fetch_add_u64(&EbiTreeBuf->eviction_rr_idx, 1) %
-				   NEbiTreeBuffers;
+		NEbiTreeBuffers;
 	buf = GetEbiTreeBufDescriptor(candidate_id);
 	if (pg_atomic_read_u32(&buf->refcnt) != 0)
 	{
@@ -304,7 +291,7 @@ find_cand:
 		}
 
 		if (buf->tag.seg_id != victim_tag.seg_id ||
-			buf->tag.page_id != victim_tag.page_id)
+				buf->tag.page_id != victim_tag.page_id)
 		{
 			/*
 			 * This exception might very rare, but the possible scenario is,
@@ -330,22 +317,12 @@ find_cand:
 		 */
 		if (buf->is_dirty)
 		{
-			/* There is consensus protocol between evict page and cut segment.
-			 */
-			/* The point is that never evict(flush) page which is
-			 * included in the file of cutted-segment */
 			seg_id = buf->tag.seg_id;
 
 			/* Check if the page related segment file has been removed */
 			if (EbiSegIsAlive(EbiTreeShmem->ebitree, seg_id))
 			{
-				// ereport(LOG, (errmsg("WRITE PAGE %d", seg_id)));
 				EbiTreeWriteSegmentPage(&buf->tag, candidate_id);
-			}
-			else
-			{
-				// ereport(LOG, (errmsg("RELEASE PAGE WITHOUT FLUSHING %d",
-				// seg_id)));
 			}
 
 			/*
@@ -386,7 +363,7 @@ find_cand:
 	/* Read target segment page into the cache */
 	EbiTreeReadSegmentPage(&buf->tag, candidate_id);
 
-	/* Next, insert new vcache hash entry for it */
+	/* Next, insert new hash entry for it */
 	ret = EbiTreeHashInsert(&tag, hashcode, candidate_id);
 	Assert(ret == -1);
 
@@ -422,14 +399,17 @@ EbiTreeCreateSegmentFile(EbiTreeSegmentId seg_id)
  *
  * Remove file for corresponding seg_id
  */
-void
+	void
 EbiTreeRemoveSegmentFile(EbiTreeSegmentId seg_id)
 {
 	char filename[128];
+	int result;
 
 	sprintf(filename, "ebitree.%08d", seg_id);
 
-	Assert(remove(filename) == 0);
+	result = remove(filename);
+
+	Assert(result == 0);
 }
 
 /*
@@ -478,17 +458,16 @@ EbiTreeReadSegmentPage(const EbiTreeBufTag *tag, int buf_id)
 	Assert(fd >= 0);
 
 	read = pg_pread(fd,
-					&EbiTreeBufBlocks[buf_id * EBI_TREE_SEG_PAGESZ],
-					EBI_TREE_SEG_PAGESZ,
-					tag->page_id * EBI_TREE_SEG_PAGESZ);
+			&EbiTreeBufBlocks[buf_id * EBI_TREE_SEG_PAGESZ],
+			EBI_TREE_SEG_PAGESZ,
+			tag->page_id * EBI_TREE_SEG_PAGESZ);
 
 	/* New page */
-	/* TODO: not a clean logic */
 	if (read == 0)
 	{
 		memset(&EbiTreeBufBlocks[buf_id * EBI_TREE_SEG_PAGESZ],
-			   0,
-			   EBI_TREE_SEG_PAGESZ);
+				0,
+				EBI_TREE_SEG_PAGESZ);
 	}
 
 	EbiTreeCloseSegmentFile(fd);
@@ -498,22 +477,16 @@ static void
 EbiTreeWriteSegmentPage(const EbiTreeBufTag *tag, int buf_id)
 {
 	int fd;
+	ssize_t written;
 
 	fd = EbiTreeOpenSegmentFile(tag->seg_id);
 
-	/*
-	ereport(
-		LOG,
-		(errmsg(
-			"WRITING FILE seg_id: %d, page_id: %d", tag->seg_id,
-	tag->page_id)));
-			*/
+	written = pg_pwrite(fd,
+			&EbiTreeBufBlocks[buf_id * EBI_TREE_SEG_PAGESZ],
+			EBI_TREE_SEG_PAGESZ,
+			tag->page_id * EBI_TREE_SEG_PAGESZ);
 
-	Assert(EBI_TREE_SEG_PAGESZ ==
-		   pg_pwrite(fd,
-					 &EbiTreeBufBlocks[buf_id * EBI_TREE_SEG_PAGESZ],
-					 EBI_TREE_SEG_PAGESZ,
-					 tag->page_id * EBI_TREE_SEG_PAGESZ));
+	Assert(written == EBI_TREE_SEG_PAGESZ);
 
 	EbiTreeCloseSegmentFile(fd);
 }

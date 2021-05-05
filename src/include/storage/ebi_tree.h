@@ -131,6 +131,9 @@ extern bool EbiSegIsAlive(dsa_pointer dsa_ebitree, EbiTreeSegmentId seg_id);
 
 extern bool EbiRecentNodeIsAlive(dsa_pointer dsa_ebitree);
 
+/* Statistics */
+extern void EbiMarkTupleSize(Size tuple_size);
+
 /* Debug */
 void EbiPrintTree(dsa_pointer dsa_ebitree);
 void EbiPrintTreeRecursive(EbiNode node);

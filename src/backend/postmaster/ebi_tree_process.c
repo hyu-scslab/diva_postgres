@@ -271,7 +271,7 @@ EbiNeedsNewNode(void)
 	curr_max_xid = EbiGetMaxTransactionId();
 	duration = curr_max_xid - EbiTreeShmem->max_xid;
 
-	Assert(duration > 0);
+	Assert(duration >= 0);
 
 	if (duration >= EbiTreeShmem->average_ver_len * EbiGenerationMultiplier)
 	{

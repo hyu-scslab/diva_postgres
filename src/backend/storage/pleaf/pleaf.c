@@ -101,7 +101,7 @@ PLeafLookupTuple(
 	
 	/* Read value from EBI-Tree */
 	// API in EBI-Tree
-  ebi_page_frame_id = EbiLookupVersion(version_offset, tuple_size, ret_value);
+	ebi_page_frame_id = EbiLookupVersion(version_offset, tuple_size, ret_value);
 
 	// Return ebi-page-frame-id
 	return ebi_page_frame_id;

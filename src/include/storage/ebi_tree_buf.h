@@ -64,9 +64,6 @@ typedef struct EbiTreeBufMeta
 
 #define InvalidEbiTreeBuf (INT_MAX)
 
-/* Check both globals.c and miscadmin.h */
-extern PGDLLIMPORT int NEbiTreeBuffers;
-
 /* Public functions */
 extern Size EbiTreeBufShmemSize(void);
 extern void EbiTreeBufInit(void);

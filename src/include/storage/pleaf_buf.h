@@ -210,7 +210,8 @@ extern PLeafPageId PLeafFrameToPageId(int frame_id);
 
 extern void PLeafMakeNewGeneration(void);
 extern void PLeafCleanOldGeneration(void);
-
 extern bool PLeafNeedsNewGeneration(void);
+
+extern void PLeafMonitorVersionSpace(void);
 
 #endif /* PLEAF_BUF_H */

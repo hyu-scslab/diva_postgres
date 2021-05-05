@@ -182,10 +182,11 @@ PLeafManagerMain(void)
 
 		if (PLeafNeedsNewGeneration())
 		{
-      // TODO: check point for generation change
-      /* Create new generation */
+			/* Create new generation */
 			PLeafMakeNewGeneration();
 		}
+
+		PLeafMonitorVersionSpace();
 
 		(void) WaitLatch(MyLatch,
 						 WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
@@ -193,7 +194,5 @@ PLeafManagerMain(void)
 						 WAIT_EVENT_PLEAF_MANAGER_MAIN);
 	}
 }
-
-
 
 #endif

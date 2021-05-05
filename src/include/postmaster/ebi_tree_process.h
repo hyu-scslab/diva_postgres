@@ -41,6 +41,8 @@ typedef struct
 	uint32 average_ver_len;
 	pg_atomic_flag is_updating_stat;
 	struct timespec last_timespec;
+	bool version_usage_check_flag;
+	Size sampled_tuple_size;
 } EbiTreeShmemStruct;
 
 extern EbiTreeShmemStruct* EbiTreeShmem;

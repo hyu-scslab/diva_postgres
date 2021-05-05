@@ -1125,6 +1125,16 @@ EbiUpdateTimespec(void)
 }
 
 void
+EbiMarkTupleSize(Size tuple_size)
+{
+	if (EbiTreeShmem->version_usage_check_flag)
+		return;
+
+	EbiTreeShmem->sampled_tuple_size = tuple_size;
+	EbiTreeShmem->version_usage_check_flag = true;
+}
+
+void
 EbiPrintTree(dsa_pointer dsa_ebitree)
 {
 	EbiTree ebitree;

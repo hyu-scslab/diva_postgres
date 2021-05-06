@@ -16,7 +16,7 @@
 #include "port/atomics.h"
 #include "storage/ebi_tree.h"
 
-#define EBI_TREE_SEG_PAGESZ (BLCKSZ)
+#define EBI_TREE_SEG_PAGESZ ((Size)BLCKSZ)
 
 typedef struct EbiTreeBufTag
 {

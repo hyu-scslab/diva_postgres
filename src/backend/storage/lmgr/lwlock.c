@@ -151,6 +151,8 @@ static const char *const BuiltinTrancheNames[] = {
 #ifdef J3VM
 	/* LWTRANCHE_PLEAF_BUFFER_IO: */
 	"PLeafBufferIO",
+	/* LWTRANCHE_EBI_NAMED_LOCK: */
+	"EbiNamedLock",
 #endif
 	/* LWTRANCHE_REPLICATION_ORIGIN_STATE: */
 	"ReplicationOriginState",

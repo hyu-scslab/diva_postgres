@@ -25,7 +25,6 @@
 #include "libpq/pqsignal.h"
 #include "miscadmin.h"
 #include "pgstat.h"
-#include "postmaster/ebi_tree_process.h"
 #include "postmaster/interrupt.h"
 #include "postmaster/postmaster.h"
 #include "postmaster/walwriter.h"
@@ -49,9 +48,15 @@
 #include "utils/ps_status.h"
 #include "utils/resowner.h"
 #include "utils/timeout.h"
+#include "access/xact.h"
+#include "postmaster/ebi_tree_process.h"
 
 int EbiGenerationMultiplier = 1; /* constant */
-int EbiGenerationDelay = 2;     /* seconds */
+int EbiGenerationDelay = 1500;   /* seconds */
+
+/*
+ * For NamedSnapshot params.
+ */
 
 /*
  * GUC parameters
@@ -85,6 +90,10 @@ EbiTreeProcessMain(void)
 	sigjmp_buf local_sigjmp_buf;
 	MemoryContext ebitree_context;
 
+#ifdef JS_WIDTH
+	int current_time_for_print;
+	int loop_cnt_for_print;
+#endif
 	EbiTreeShmem->ebitree_pid = MyProcPid;
 
 	/*
@@ -200,6 +209,10 @@ EbiTreeProcessMain(void)
 	/* Initialize EBI-tree process's local variables */
 	EbiTreeProcessInit();
 
+#ifdef JS_WIDTH
+	current_time_for_print = 0;
+	loop_cnt_for_print = 0;
+#endif
 	/*
 	 * Loop forever
 	 */
@@ -213,7 +226,11 @@ EbiTreeProcessMain(void)
 		/* Clear any already-pending wakeups */
 		ResetLatch(MyLatch);
 
+#ifdef J3VM_PRINT
+		HandleMainLoopInterrupts();
+#else
 		HandleEbiTreeProcessInterrupts();
+#endif
 
 		cur_timeout = EbiTreeDelay;
 		curr_slot = pg_atomic_read_u32(&EbiTreeShmem->curr_slot);
@@ -246,6 +263,13 @@ EbiTreeProcessMain(void)
 			EbiInsertNode(EbiTreeShmem->ebitree);
 		}
 
+#ifdef JS_WIDTH
+		loop_cnt_for_print++;
+		if (0) {
+		//if (loop_cnt_for_print % 300 == 0) {
+			PrintTreeToFile(current_time_for_print++);
+		}
+#endif
 		(void)WaitLatch(MyLatch,
 						WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
 						cur_timeout,
@@ -259,13 +283,13 @@ EbiNeedsNewNode(void)
 	TransactionId curr_max_xid;
 	TransactionId duration;
 	struct timespec now;
-	int elapsed;
+	long long elapsed;
 
 	/* Current recent node is not opened by the first visiting transaction */
 	if (!EbiRecentNodeIsAlive(EbiTreeShmem->ebitree))
 	{
 		return false;
-	}
+	} 
 
 	/* Check average version lifetime */
 	curr_max_xid = EbiGetMaxTransactionId();

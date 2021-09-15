@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <unistd.h>
 
 /*
  * PLeafCheckContraction
@@ -189,7 +190,16 @@ for_loop:
 	}
 
 	capacity = PLeafPageGetCapacity(page);
-	ASSERT_OFFSET(offset, capacity);
+	//ASSERT_OFFSET(offset, capacity);
+	if (((offset % PLEAF_PAGE_SIZE) - PLEAF_PAGE_HEADER_SIZE) % (capacity * PLEAF_VERSION_DATA_SIZE) != 0)
+	{
+		ereport(LOG, (errmsg("@@@ Invalid Offset1")));
+		sleep(3000);
+	} else if (offset == 0) {
+		ereport(LOG, (errmsg("@@@ Invalid Offset2")));
+		sleep(3000);
+	}
+
 	array_index = PLeafPageGetArrayIndex(capacity, offset);
 	ASSERT_ARR_IDX(array_index);
 
@@ -639,6 +649,7 @@ PLeafContractVersions(PLeafTempInfo temp_info,
 			 * If the number of versions in indirect array is one,
 			 * remove this indirect array.
 			 */
+			ereport(LOG, (errmsg("kk")));
 			*ret_offset = 
 				PLeafMakeOffset(free_pool->gen_no, 
 						PLeafGetVersionOffset(new_first_version));
@@ -882,9 +893,7 @@ PLeafExpandVersions(PLeafTempInfo
 			PLeafMarkDirtyPage(new_frame_id);	
 			PLeafReleasePage(new_frame_id);
 
-			//LWLockAcquire(rwlock, LW_EXCLUSIVE);
 			*ret_offset = PLeafMakeOffset(free_pool->gen_no, new_ret_offset);
-			//LWLockRelease(rwlock);
 
 			return true;
 		} 
@@ -1175,6 +1184,7 @@ PLeafAppendVersion(PLeafOffset offset,
 		page_count--;
 		assert(page_count != 0);
 	}
+
 
 	/* Release all pages in temporarily information */
 	for (int i = 1; i <= max_page_count; ++i)

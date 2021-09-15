@@ -420,6 +420,12 @@ do { \
 #define PIV_REPORT_STAT			(1 << 1)
 
 #ifdef J3VM 
+/**
+ * -----------------------------------------------------------------------------
+ *   8-byte   |    8-byte   |   4-byte  | 8-byte |  8-byte    |      8-byte    |
+ * left-pleaf | right-pleaf | xid-bound | seq_no | xid bound  | version offset |
+ * ----------------------------------------------------------------------------
+ */
 #define PITEM_SZ (20)
 
 #define PageAddItemWithDummy(page, item, size, offsetNumber, \

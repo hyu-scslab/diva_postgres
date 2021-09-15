@@ -33,7 +33,8 @@ typedef uint32 EbiTreeSegmentOffset;
 typedef uint32 EbiTreeSegmentPageId;
 
 #define EbiGetCurrentTime(timespec) clock_gettime(CLOCK_MONOTONIC, timespec)
-#define EbiGetTimeElapsedInSeconds(now, base) (now.tv_sec - base.tv_sec)
+#define EbiGetTimeElapsedInSeconds(now, base) \
+	(1000LL * (now.tv_sec - base.tv_sec) + (now.tv_nsec - base.tv_nsec) / 1000000LL)
 
 typedef struct EbiNodeData
 {
@@ -43,6 +44,9 @@ typedef struct EbiNodeData
 	dsa_pointer proxy_target;
 	dsa_pointer proxy_list_tail; /* tail pointer used for appending */
 
+#ifdef JS_WIDTH
+	uint32 left_most;
+#endif
 	uint32 height;
 	pg_atomic_uint32 refcnt;
 
@@ -60,6 +64,7 @@ typedef struct EbiTreeData
 {
 	dsa_pointer root;        /* EbiNode */
 	dsa_pointer recent_node; /* EbiNode */
+
 } EbiTreeData;
 
 typedef struct EbiTreeData* EbiTree;
@@ -112,6 +117,9 @@ extern void EbiUnlinkNodes(dsa_pointer dsa_ebitree,
 						   dsa_pointer unlink_queue,
 						   EbiSpscQueue delete_queue);
 
+#ifdef JS_WIDTH
+extern void PrintTreeToFile(int time);
+#endif
 extern void EbiDeleteNodes(EbiSpscQueue delete_queue);
 extern void EbiDeleteNode(EbiNode node, dsa_pointer dsa_ptr);
 
@@ -137,5 +145,6 @@ extern void EbiMarkTupleSize(Size tuple_size);
 /* Debug */
 void EbiPrintTree(dsa_pointer dsa_ebitree);
 void EbiPrintTreeRecursive(EbiNode node);
+
 
 #endif /* EBI_TREE_H */

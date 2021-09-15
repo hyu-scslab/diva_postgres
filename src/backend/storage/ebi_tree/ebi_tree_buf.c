@@ -25,12 +25,12 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "storage/lwlock.h"
+#include "storage/shmem.h"
 
 #include "postmaster/ebi_tree_process.h"
 #include "storage/ebi_tree_buf.h"
 #include "storage/ebi_tree_hash.h"
-#include "storage/lwlock.h"
-#include "storage/shmem.h"
 #include "utils/dynahash.h"
 
 /* Check both globals.c and miscadmin.h */
@@ -40,7 +40,7 @@ EbiTreeBufDescPadded *EbiTreeBufDescriptors;
 char *EbiTreeBufBlocks;
 EbiTreeBufMeta *EbiTreeBuf;
 
-#define EBI_TREE_SEG_OFFSET_TO_PAGE_ID(off) ((off) / (EBI_TREE_SEG_PAGESZ))
+#define EBI_TREE_SEG_OFFSET_TO_PAGE_ID(off) (uint32)((off) / (EBI_TREE_SEG_PAGESZ))
 
 /* Private functions */
 static int EbiTreeBufGetBufRef(EbiTreeSegmentId seg_id,
@@ -213,21 +213,15 @@ EbiTreeBufGetBufRef(EbiTreeSegmentId seg_id, EbiTreeSegmentOffset seg_offset)
 		return buf_id;
 	}
 
-	/*
-	 * Need to acquire exclusive lock for inserting a new vcache_hash entry
-	 */
 	LWLockRelease(new_partition_lock);
 	LWLockAcquire(new_partition_lock, LW_EXCLUSIVE);
-
-	/*
-	 * If another transaction already inserted the vcache hash entry,
-	 * just use it
-	 */
 	buf_id = EbiTreeHashLookup(&tag, hashcode);
 	if (buf_id >= 0)
 	{
+		/* Target page is already in cache */
 		buf = GetEbiTreeBufDescriptor(buf_id);
 
+		/* Increase refcount by 1, so this page couldn't be evicted */
 		pg_atomic_fetch_add_u32(&buf->refcnt, 1);
 		LWLockRelease(new_partition_lock);
 
@@ -257,7 +251,7 @@ find_cand:
 		 * This entry is using now so that we need to remove vcache_hash
 		 * entry for it. We also need to flush it if the cache entry is dirty.
 		 */
-		hashcode_vict = EbiTreeHashCode(&buf->tag);
+		hashcode_vict = EbiTreeHashCode(&victim_tag);
 		old_partition_lock = EbiTreeMappingPartitionLock(hashcode_vict);
 		if (LWLockHeldByMe(old_partition_lock))
 		{
@@ -305,6 +299,7 @@ find_cand:
 			 *    changed
 			 * In this case, just find another victim for simplicity now.
 			 */
+			pg_atomic_fetch_sub_u32(&buf->refcnt, 1);
 			LWLockRelease(old_partition_lock);
 			goto find_cand;
 		}
@@ -317,13 +312,21 @@ find_cand:
 		 */
 		if (buf->is_dirty)
 		{
-			seg_id = buf->tag.seg_id;
+			//seg_id = buf->tag.seg_id;
+
+			Assert(buf->tag.seg_id != 0);
 
 			/* Check if the page related segment file has been removed */
-			if (EbiSegIsAlive(EbiTreeShmem->ebitree, seg_id))
+			uint32 my_slot = pg_atomic_read_u32(&EbiTreeShmem->curr_slot);
+			pg_atomic_fetch_add_u64(&EbiTreeShmem->gc_queue_refcnt[my_slot], 1);
+			pg_memory_barrier();
+
+			if (EbiSegIsAlive(EbiTreeShmem->ebitree, buf->tag.seg_id))
 			{
 				EbiTreeWriteSegmentPage(&buf->tag, candidate_id);
 			}
+
+			pg_atomic_fetch_sub_u64(&EbiTreeShmem->gc_queue_refcnt[my_slot], 1);
 
 			/*
 			 * We do not zero the page so that the page could be overwritten
@@ -346,7 +349,7 @@ find_cand:
 		 * This cache entry is unused. Just increase the refcount and use it.
 		 */
 		ret = pg_atomic_fetch_add_u32(&buf->refcnt, 1);
-		if (ret > 0)
+		if (ret > 0 || buf->tag.seg_id != 0)
 		{
 			/*
 			 * Race occured. Possibly another evicting tranasaction might get
@@ -354,7 +357,7 @@ find_cand:
 			 */
 			pg_atomic_fetch_sub_u32(&buf->refcnt, 1);
 			goto find_cand;
-		}
+		} 
 	}
 
 	/* Initialize the descriptor for a new cache */
@@ -386,7 +389,7 @@ EbiTreeCreateSegmentFile(EbiTreeSegmentId seg_id)
 	int fd;
 	char filename[128];
 
-	sprintf(filename, "ebitree.%08d", seg_id);
+	sprintf(filename, "ebitree.%09d", seg_id);
 	fd = open(filename, O_RDWR | O_CREAT, (mode_t)0600);
 
 	Assert(fd >= 0);
@@ -405,7 +408,7 @@ EbiTreeRemoveSegmentFile(EbiTreeSegmentId seg_id)
 	char filename[128];
 	int result;
 
-	sprintf(filename, "ebitree.%08d", seg_id);
+	sprintf(filename, "ebitree.%09d", seg_id);
 
 	result = remove(filename);
 
@@ -426,7 +429,7 @@ EbiTreeOpenSegmentFile(EbiTreeSegmentId seg_id)
 
 	Assert(seg_id != 0);
 
-	sprintf(filename, "ebitree.%08d", seg_id);
+	sprintf(filename, "ebitree.%09d", seg_id);
 	fd = open(filename, O_RDWR, (mode_t)0600);
 
 	Assert(fd >= 0);

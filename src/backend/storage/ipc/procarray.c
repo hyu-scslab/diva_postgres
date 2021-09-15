@@ -1747,6 +1747,7 @@ GetSnapshotData(Snapshot snapshot)
 	if ((!(IsInParallelMode() || IsParallelWorker())) && is_txn)
 		(void) GetCurrentTransactionId();
 #endif
+
 	/*
 	 * Update globalxmin to include actual process xids.  This is a slightly
 	 * different way of computing it than GetOldestXmin uses, but should give

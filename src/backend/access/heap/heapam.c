@@ -549,7 +549,7 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 				ret_id = -1;
 
 			} else if (PLeafIsLeftLookup(l_off, r_off, xid_bound, snapshot))
-			{
+			{	
 				ret_id = PLeafLookupTuple(l_off, snapshot, 
 												loctup.t_len, (void**) &(loctup.t_data));
 			}
@@ -558,7 +558,6 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 				ret_id = PLeafLookupTuple(r_off, snapshot,
 												loctup.t_len, (void**) &(loctup.t_data));
 			}
-
 
 			if (ret_id != -1)
 			{
@@ -1915,6 +1914,7 @@ heap_hot_search_buffer_with_vc(ItemPointer tid, Relation relation,
 		ret_id = PLeafLookupTuple(r_off, snapshot,
 										heapTuple->t_len, (void**) &(heapTuple->t_data));
 	}
+
 
 	if (ret_id != -1)
 	{
@@ -4550,23 +4550,21 @@ l2:
 		 * In PLeafAppendTuple, we only acquire this latch(buffer) in specific
 		 * cases.
 		 */
-//		LockBuffer(buffer, BUFFER_LOCK_UNLOCK);
 		/* Get lwlock pointer of buffer */
 		lwlock = (LWLock*) GetBufferLock(buffer);
 
 		if (is_left)
 		{
 			PLeafAppendTuple(l_off, (uint64*) meta_tup, xmin, xmax,
-          second_oldtup.t_len, second_oldtup.t_data, lwlock);
+          second_oldtup.t_len, second_oldtup.t_data, 
+					lwlock);
 		}
 		else
 		{
 			PLeafAppendTuple(r_off, (uint64*) (meta_tup + sizeof(uint64)), 
-          xmin, xmax, second_oldtup.t_len, second_oldtup.t_data, lwlock);
+          xmin, xmax, second_oldtup.t_len, second_oldtup.t_data, 
+					lwlock);
 		}
-
-		// ret_value 
-//		LockBuffer(buffer, BUFFER_LOCK_EXCLUSIVE);
 	}
 
 	/*

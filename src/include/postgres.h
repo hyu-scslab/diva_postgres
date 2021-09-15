@@ -47,6 +47,10 @@
 #include "utils/elog.h"
 #include "utils/palloc.h"
 
+#ifdef J3VM_PRINT
+extern PGDLLIMPORT double pleaf_time;
+extern PGDLLIMPORT double ebi_time;
+#endif
 /* ----------------------------------------------------------------
  *				Section 1:	variable-length datatypes (TOAST support)
  * ----------------------------------------------------------------

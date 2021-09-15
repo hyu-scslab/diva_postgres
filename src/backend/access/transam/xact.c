@@ -566,7 +566,6 @@ AssignTransactionId(TransactionState s)
 	/* Assert that caller didn't screw up */
 	Assert(!FullTransactionIdIsValid(s->fullTransactionId));
 	Assert(s->state == TRANS_INPROGRESS);
-
 	/*
 	 * Workers synchronize transaction state at the beginning of each parallel
 	 * operation, so we can't account for new XIDs at this point.
@@ -6048,7 +6047,7 @@ BindTransaction(Snapshot snapshot)
 {
 	TransactionState s = CurrentTransactionState;
 	dsa_pointer node = EbiIncreaseRefCount(snapshot); 
-	s->ebiNode = node;                                                             
+	s->ebiNode = node;                                                           
 }
 
 void
@@ -6061,4 +6060,5 @@ UnbindTransaction(void)
 		EbiDecreaseRefCount(s->ebiNode);
 	}
 }
+
 #endif

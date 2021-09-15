@@ -2733,10 +2733,10 @@ SIGHUP_handler(SIGNAL_ARGS)
 		if (WalWriterPID != 0)
 			signal_child(WalWriterPID, SIGHUP);
 #ifdef J3VM
-		if (EbiTreePID != 0)
-			signal_child(EbiTreePID, SIGHUP);
 		if (PLeafMgrPID != 0)
 			signal_child(PLeafMgrPID, SIGHUP);
+		if (EbiTreePID != 0)
+			signal_child(EbiTreePID, SIGHUP);
 #endif
 		if (WalReceiverPID != 0)
 			signal_child(WalReceiverPID, SIGHUP);
@@ -3068,6 +3068,7 @@ reaper(SIGNAL_ARGS)
 #ifdef J3VM
 			if (EbiTreePID == 0)
 				EbiTreePID = StartEbiTree();
+
 			if (PLeafMgrPID == 0)
 				PLeafMgrPID = StartPLeafManager();
 #endif
@@ -3899,12 +3900,13 @@ PostmasterStateMachine(void)
 		if (WalWriterPID != 0)
 			signal_child(WalWriterPID, SIGTERM);
 #ifdef J3VM
-		/* and the ebi tree too */
-		if (EbiTreePID != 0)
-			signal_child(EbiTreePID, SIGTERM);
 		/* and the pleaf manager too */
 		if (PLeafMgrPID != 0)
 			signal_child(PLeafMgrPID, SIGTERM);
+
+		/* and the ebi tree too */
+		if (EbiTreePID != 0)
+			signal_child(EbiTreePID, SIGTERM);
 #endif
 		/* If we're in recovery, also stop startup and walreceiver procs */
 		if (StartupPID != 0)
@@ -4230,11 +4232,10 @@ TerminateChildren(int signal)
 	if (WalWriterPID != 0)
 		signal_child(WalWriterPID, signal);
 #ifdef J3VM
-	if (EbiTreePID != 0)
-		signal_child(EbiTreePID, signal);
-
 	if (PLeafMgrPID != 0)
 		signal_child(PLeafMgrPID, signal);
+	if (EbiTreePID != 0)
+		signal_child(EbiTreePID, signal);
 #endif
 	if (WalReceiverPID != 0)
 		signal_child(WalReceiverPID, signal);

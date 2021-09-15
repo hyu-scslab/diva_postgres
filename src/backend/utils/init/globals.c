@@ -136,7 +136,7 @@ int			NBuffers = 1000;
 int		NPLeafBuffers = PLEAF_NUM_PAGE;
 #else
 /* Default : 40M */
-int		NPLeafBuffers = 1000 * 10;
+int		NPLeafBuffers = 100 * 10;
 #endif /* PLEAF_NUM_PAGE */
 
 #ifdef PLEAF_NUM_INSTANCE

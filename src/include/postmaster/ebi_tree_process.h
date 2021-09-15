@@ -15,6 +15,7 @@
 
 #include "c.h"
 #include "utils/dsa.h"
+#include "utils/snapshot.h"
 
 #define EBI_NUM_GC_QUEUE (2)
 
@@ -43,11 +44,13 @@ typedef struct
 	struct timespec last_timespec;
 	bool version_usage_check_flag;
 	Size sampled_tuple_size;
+
 } EbiTreeShmemStruct;
 
 extern EbiTreeShmemStruct* EbiTreeShmem;
 
 /* src/backend/storage/ebi_tree/ebi_tree.c */
 extern dsa_area* ebitree_dsa_area;
+
 
 #endif /* EBI_TREE_PROCESS_H */

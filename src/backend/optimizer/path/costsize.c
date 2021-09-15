@@ -122,6 +122,10 @@ Cost		disable_cost = 1.0e10;
 
 int			max_parallel_workers_per_gather = 2;
 
+#ifdef J3VM_PRINT
+bool		j3vm_print = false;
+#endif
+
 bool		enable_seqscan = true;
 bool		enable_indexscan = true;
 bool		enable_indexonlyscan = true;

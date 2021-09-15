@@ -44,7 +44,6 @@ extern PGDLLIMPORT int NPLeafBuffers;
 extern PGDLLIMPORT int NPLeafInstances;
 extern PGDLLIMPORT int NPLeafInitPages;
 
-
 /* Temporal fd (private) for Pleaf file */
 int pleaf_fd;
 
@@ -233,6 +232,7 @@ PLeafInitMeta(PLeafGenNumber gen_no)
 	PLeafMeta *meta;
 
 	meta = &PLeafMetadata->pleafmeta;
+
 	pg_atomic_init_u64(&meta->eviction_rr_idx, 0);
 	meta->max_page_ids[LEFT_POOL] = NPLeafInitPages * NPLeafInstances;
 	meta->max_page_ids[RIGHT_POOL] = 0;
@@ -380,9 +380,7 @@ PLeafGetPageInternal(PLeafPageId page_id,
 
 	/* Need to acquire exclusive lock for inserting a new hash entry */
 	LWLockRelease(new_partition_lock);
-	LWLockAcquire(new_partition_lock, LW_EXCLUSIVE);
-
-	/* Another transaction could insert hash entry */
+	/*LWLockAcquire(new_partition_lock, LW_EXCLUSIVE);
 	frame_id = PLeafHashLookup(&pleaf_tag, hashcode);
 
 	if (frame_id >= 0)
@@ -393,7 +391,7 @@ PLeafGetPageInternal(PLeafPageId page_id,
 		LWLockRelease(new_partition_lock);
 
 		return frame_id;
-	}
+	}*/
 
 find_cand:
 	/* Pick up a candidate entry for a new allocation */
@@ -416,11 +414,13 @@ find_cand:
 		 * This entry is using now so that we need to remove hash entry for it.
 		 * We also need to flush it if the entry is dirty 
 		 */
-		hashcode_vict = PLeafHashCode(&frame->tag);
+		//hashcode_vict = PLeafHashCode(&frame->tag);
+		hashcode_vict = PLeafHashCode(&victim_tag);
 		old_partition_lock = PLeafMappingPartitionLock(hashcode_vict);
 
 		if (LWLockHeldByMe(old_partition_lock))
 		{
+			Assert(false);
 			/*
 			 * Partition lock collision occured by myself
 			 *
@@ -466,18 +466,17 @@ find_cand:
 			 * becomes 0, but page_id and(or) gen_no of this entry have changed
 			 * In this case, just find another victim for simplicity now
 			 */
+
+			pg_atomic_fetch_sub_u32(&frame->refcount, 1);
 			LWLockRelease(old_partition_lock);
 			goto find_cand;
 		}
 
+		Assert(frame->tag.page_id == victim_tag.page_id &&
+				frame->tag.gen_no == victim_tag.gen_no);
+
 		if (frame->is_dirty)
 		{
-			/*
-			 * JAESEON: GENERATION NUMBER
-			 * Write dirty page to disk will be not executed depends on
-			 * generation number (active or inactive).
-			 * NOT AVAILABLE FOR NOW
-			 */
 			PLeafWritePage(&frame->tag, candidate_id);
 			frame->is_dirty = false;
 		}
@@ -488,7 +487,6 @@ find_cand:
 		 * the partition lock
 		 */
 		PLeafHashDelete(&frame->tag, hashcode_vict);
-
 		LWLockRelease(old_partition_lock);
 	}
 	else
@@ -496,8 +494,6 @@ find_cand:
 		/*
 		 * This entry is unused. Increase the refcount and use it
 		 */
-		assert(!frame->is_dirty);
-
 		ret = pg_atomic_fetch_add_u32(&frame->refcount, 1);
 		if (ret > 0)
 		{
@@ -507,10 +503,42 @@ find_cand:
 			 */
 			pg_atomic_fetch_sub_u32(&frame->refcount, 1);
 			goto find_cand;
+		} 
+		else if (frame->tag.gen_no != 0)
+		{
+			pg_atomic_fetch_sub_u32(&frame->refcount, 1);
+			goto find_cand;
 		}
+		assert(!frame->is_dirty);
+	}
+
+	LWLockAcquire(new_partition_lock, LW_EXCLUSIVE);
+	frame_id = PLeafHashLookup(&pleaf_tag, hashcode);
+
+	if (frame_id >= 0) 
+	{
+		Assert(frame_id != candidate_id);
+
+		frame->tag.gen_no = 0;
+
+		pg_memory_barrier();
+		frame->tag.page_id = 0;
+
+		pg_memory_barrier();
+		pg_atomic_fetch_sub_u32(&frame->refcount, 1);
+
+		frame = GetPLeafDescriptor(frame_id);
+
+		pg_atomic_fetch_add_u32(&frame->refcount, 1);
+		Assert(frame->tag.gen_no == pleaf_tag.gen_no &&
+				frame->tag.page_id == pleaf_tag.page_id);
+
+		LWLockRelease(new_partition_lock);
+		return frame_id;
 	}
 
 	frame->tag = pleaf_tag;
+
 	/*
 	 * If requested page is not in the disk yet, we don't need to
 	 * read it from the disk, and it's actually not in the disk.
@@ -519,9 +547,6 @@ find_cand:
 	 * There are two cases is_new is true.
 	 * PLeafInit() & PLeafStackPop().
 	 */
-//	if (!is_new)
-//		PLeafReadPage(&frame->tag, candidate_id);
-
 	ret = PLeafHashInsert(&pleaf_tag, hashcode, candidate_id);
 	assert(ret == -1);
 
@@ -552,9 +577,11 @@ PLeafReadPage(const PLeafTag *tag,
 							PLEAF_PAGE_SIZE, tag->page_id * PLEAF_PAGE_SIZE);
 	if (PLEAF_PAGE_SIZE != read_size)
 	{
-		sleep(20);
+		ereport(LOG, (errmsg("page id : %u", tag->page_id)));
+		ereport(LOG, (errmsg("$$$$ PLeafReadPage")));
+		sleep(3600);
 	}
-	assert(PLEAF_PAGE_SIZE == read_size);
+	Assert(PLEAF_PAGE_SIZE == read_size);
 	//assert(PLEAF_PAGE_SIZE == (read_size = pg_pread(pleaf_fd,
 	//						&PLeafBlocks[frame_id * PLEAF_PAGE_SIZE],
 	//						PLEAF_PAGE_SIZE, tag->page_id * PLEAF_PAGE_SIZE)));
@@ -589,10 +616,11 @@ PLeafWritePage(const PLeafTag *tag,
 
 	PLeafOpenFile(pool_index);
 
-	assert(PLEAF_PAGE_SIZE == pg_pwrite(pleaf_fd, 
+	Assert(PLEAF_PAGE_SIZE == pg_pwrite(pleaf_fd, 
 							&PLeafBlocks[frame_id * PLEAF_PAGE_SIZE],
 							PLEAF_PAGE_SIZE, tag->page_id * PLEAF_PAGE_SIZE));
 
+	
 	PLeafCloseFile();
 	LWLockRelease(&PLeafBufferIOLWLockArray[pool_index].lock);
 }
@@ -1112,6 +1140,7 @@ PLeafStackPop(PLeafFreeStack free_stack,
 									&PLeafMetadata->pleafmeta.max_page_ids[pool_index], 1);
 	page = PLeafGetPage(page_id, gen_no, true, frame_id);
 	
+	assert(cap_index < 0x8);
 	PLeafPageSetCapAndInstNo(page, cap_index, inst_no);
 	PLeafPageInitBitmap(page, cap_index);
 
@@ -1168,7 +1197,6 @@ PLeafGetPoolIndex(PLeafGenNumber gen_no)
 	return ret;
 }
 
-
 void
 PLeafMakeNewGeneration()
 {
@@ -1186,15 +1214,11 @@ PLeafMakeNewGeneration()
 	new_gen_no = PLeafUpdateVersionInfo();
 	assert(new_gen_no == meta->generation_numbers[meta->recent_index] + 1);
 
-	/*
-	 * XXX: max_page_id....?
-	 */
 	meta->max_page_ids[new_recent_index] = 0;
 	meta->generation_numbers[new_recent_index] = new_gen_no;
 	PLeafManager->pools[new_recent_index].gen_no = new_gen_no;	
 
 	meta->recent_index = new_recent_index;
-
 	meta->generation_max_xid = PLeafGetMaxTransactionId();
 
 	ereport(LOG, (errmsg("@@ PLeafMakeNewGeneration, %u", new_gen_no)));
@@ -1221,7 +1245,7 @@ PLeafCleanOldGeneration(void)
 
 	assert(meta->generation_max_xid != 0);
 	oldest_active_xid = PLeafGetOldestActiveTransactionId();
-
+	
 	if (!((oldest_active_xid == MyMaxTransactionId) ||
 			(meta->generation_max_xid <= oldest_active_xid)))
 		return;

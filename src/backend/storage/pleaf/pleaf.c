@@ -29,6 +29,9 @@
 
 #include <assert.h>
 
+#ifdef J3VM_PRINT
+#include "optimizer/cost.h"
+#endif
 /*
  * PLeafLookupTuple
  *
@@ -50,6 +53,11 @@ PLeafLookupTuple(
 	PLeafVersionOffset version_offset;
 	bool version_found;
 	int ebi_page_frame_id;
+#ifdef J3VM_PRINT
+	struct timespec starttime, endtime;
+	if (j3vm_print)
+		clock_gettime(CLOCK_MONOTONIC, &starttime);
+#endif
 
 	/*
 	 * Offset value in record
@@ -93,16 +101,26 @@ PLeafLookupTuple(
 			break;
 		}
 	}
+#ifdef J3VM_PRINT
+	if (j3vm_print)
+	{
+		clock_gettime(CLOCK_MONOTONIC, &endtime);
+		pleaf_time += (endtime.tv_sec - starttime.tv_sec) * 1000 +
+							(double)(endtime.tv_nsec - starttime.tv_nsec) / 1000000;
+	}
+#endif
 
 	/* Fail to find the visible version locator */
 	if (version_offset == PLEAF_INVALID_VERSION_OFFSET) {
+#ifdef J3VM_PRINT
+		Assert(false);
+#endif
 		return -1;
 	}
 	
 	/* Read value from EBI-Tree */
 	// API in EBI-Tree
 	ebi_page_frame_id = EbiLookupVersion(version_offset, tuple_size, ret_value);
-
 	// Return ebi-page-frame-id
 	return ebi_page_frame_id;
 }
@@ -130,7 +148,8 @@ PLeafAppendTuple(
 	 * It can be already obsolete version
 	 * version_offset = EBI-APPEND-VERSION
 	 */
-	version_offset = EbiSiftAndBind(xmin, xmax, tuple_size, tuple, rwlock);
+	version_offset = EbiSiftAndBind(xmin, xmax, tuple_size, tuple, 
+			rwlock);
 
 	if (version_offset == PLEAF_INVALID_VERSION_OFFSET) {
 		return;

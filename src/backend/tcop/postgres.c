@@ -101,7 +101,13 @@ int			max_stack_depth = 100;
 /* wait N seconds to allow attach from a debugger */
 int			PostAuthDelay = 0;
 
+#ifdef J3VM_PRINT
+extern PGDLLIMPORT bool j3vm_print;
 
+double total_time = 0;
+double pleaf_time = 0;
+double ebi_time = 0;
+#endif
 
 /* ----------------
  *		private variables
@@ -998,6 +1004,11 @@ exec_simple_query(const char *query_string)
 	}
 #endif
 
+#ifdef J3VM_PRINT
+	struct timespec starttime, endtime;
+	if (j3vm_print)
+		clock_gettime(CLOCK_MONOTONIC, &starttime);
+#endif
 	/*
 	 * Report query to various monitoring facilities.
 	 */
@@ -1345,6 +1356,24 @@ exec_simple_query(const char *query_string)
 	TRACE_POSTGRESQL_QUERY_DONE(query_string);
 
 	debug_query_string = NULL;
+
+#ifdef J3VM_PRINT
+	if (j3vm_print)
+	{
+		double total_elapsed;
+		clock_gettime(CLOCK_MONOTONIC, &endtime);
+
+		total_elapsed = (endtime.tv_sec - starttime.tv_sec) * 1000 +
+			(endtime.tv_nsec - starttime.tv_nsec) / 1000000;
+
+		if (total_elapsed > 0)
+		{
+			total_time += total_elapsed;
+			ereport(LOG, (errmsg("[J3VM_PRINT] TOTAL %lf PLEAF %lf EBI %lf", 
+							total_time, pleaf_time, ebi_time)));
+		}
+	}
+#endif
 }
 
 /*

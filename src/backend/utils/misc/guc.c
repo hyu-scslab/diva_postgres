@@ -931,6 +931,19 @@ static const unit_conversion time_unit_conversion_table[] =
 
 static struct config_bool ConfigureNamesBool[] =
 {
+#ifdef J3VM_PRINT
+	{
+		{"j3vm_print", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("print messages for breakdown."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&j3vm_print,
+		false,
+		NULL, NULL, NULL
+	},
+#endif
+
 	{
 		{"enable_seqscan", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Enables the planner's use of sequential-scan plans."),

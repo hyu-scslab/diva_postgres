@@ -17,6 +17,7 @@
 #ifdef J3VM
 #include "postgres.h"
 
+#include "storage/lwlock.h"
 #include "postmaster/ebi_tree_process.h"
 #include "storage/ebi_tree.h"
 #include "storage/ebi_tree_buf.h"
@@ -24,6 +25,11 @@
 #include "storage/procarray.h"
 #include "utils/dynahash.h"
 #include "utils/snapmgr.h"
+#include "access/xact.h"
+
+#ifdef J3VM_PRINT
+#include "optimizer/cost.h"
+#endif
 
 /* Helper macros for segment management */
 #define EBI_TREE_INVALID_SEG_ID ((EbiTreeSegmentId)(0))
@@ -145,6 +151,10 @@ EbiCreateNodeWithHeight(dsa_area* area, uint32 height)
 	node->seg_id =
 		++EbiTreeShmem->seg_id;  // the dedicated thread, alone, creates nodes
 
+#ifdef JS_WIDTH
+	node->left_most = node->seg_id;
+#endif
+
 	Assert(node->seg_id != EBI_TREE_INVALID_SEG_ID);
 
 	EbiTreeCreateSegmentFile(node->seg_id);
@@ -253,6 +263,9 @@ EbiInsertNode(dsa_pointer dsa_ebitree)
 	new_parent->left = dsa_target;
 	new_parent->right = dsa_new_leaf;
 
+#ifdef JS_WIDTH
+	new_parent->left_most = target->left_most;
+#endif
 	/*
 	 * At this point, the new nodes('f' and 'g') are not visible
 	 * since they are not connected to the original tree.
@@ -293,9 +306,15 @@ EbiFindInsertionTargetNode(EbiTree ebitree)
 	EbiNode left;
 	EbiNode right;
 
+#ifdef JS_WIDTH
+	uint32 right_most;
+#endif
 	dsa_tmp = ebitree->recent_node;
 	tmp = EbiConvertToNode(ebitree_dsa_area, dsa_tmp);
 
+#ifdef JS_WIDTH
+	right_most = tmp->left_most;
+#endif
 	dsa_parent = tmp->parent;
 	parent = EbiConvertToNode(ebitree_dsa_area, dsa_parent);
 
@@ -304,7 +323,12 @@ EbiFindInsertionTargetNode(EbiTree ebitree)
 		left = EbiConvertToNode(ebitree_dsa_area, parent->left);
 		right = EbiConvertToNode(ebitree_dsa_area, parent->right);
 
+#ifdef JS_WIDTH
+		if (parent->seg_id - parent->left_most >
+				right_most - parent->seg_id)
+#else
 		if (left->height > right->height)
+#endif
 		{
 			// Unbalanced, found target node.
 			break;
@@ -576,6 +600,10 @@ EbiCompactNode(EbiTree ebitree, dsa_pointer dsa_node)
 	dsa_pointer proxy_target;
 	uint32 original_height;
 
+#ifdef JS_WIDTH
+	uint32 current_left_most;
+#endif
+
 	proxy_target = dsa_node;
 	node = EbiConvertToNode(ebitree_dsa_area, dsa_node);
 
@@ -616,6 +644,11 @@ EbiCompactNode(EbiTree ebitree, dsa_pointer dsa_node)
 			{
 				EbiLinkProxy(node->right, proxy_target);
 				parent->left = node->right;
+#ifdef JS_WIDTH
+				EbiNode right_node = EbiConvertToNode(ebitree_dsa_area, 
+						node->right);
+				parent->left_most = right_node->left_most;
+#endif
 			}
 			tmp = EbiConvertToNode(ebitree_dsa_area, parent->left);
 		}
@@ -636,6 +669,31 @@ EbiCompactNode(EbiTree ebitree, dsa_pointer dsa_node)
 		tmp->parent = node->parent;
 
 		// Parent height propagation
+#ifdef JS_WIDTH
+		current_left_most = parent->left_most;
+
+		tmp_ptr = node->parent;
+
+		while (DsaPointerIsValid(tmp_ptr))
+		{
+			EbiNode curr, curr_parent;
+
+			curr = EbiConvertToNode(ebitree_dsa_area, tmp_ptr);
+
+			if (!DsaPointerIsValid(curr->parent)) {
+				break;
+			} else {
+				curr_parent = EbiConvertToNode(ebitree_dsa_area, curr->parent);
+				if (curr_parent->left_most == current_left_most ||
+						!EbiIsLeftChild(curr))
+					break;
+			}
+
+			curr_parent->left_most = current_left_most;
+
+			tmp_ptr = curr->parent;
+		}
+#else
 		tmp_ptr = node->parent;
 		while (DsaPointerIsValid(tmp_ptr))
 		{
@@ -656,6 +714,7 @@ EbiCompactNode(EbiTree ebitree, dsa_pointer dsa_node)
 
 			tmp_ptr = curr->parent;
 		}
+#endif
 	}
 }
 
@@ -877,10 +936,16 @@ EbiSiftAndBind(TransactionId xmin,
 
 	Assert(ebitree_dsa_area != NULL);
 
+	uint32 my_slot = pg_atomic_read_u32(&EbiTreeShmem->curr_slot);
+	pg_atomic_fetch_add_u64(&EbiTreeShmem->gc_queue_refcnt[my_slot], 1);
+	pg_memory_barrier();
+
 	node = EbiSift(xmin, xmax);
 
 	if (node == NULL)
 	{
+
+		pg_atomic_fetch_sub_u64(&EbiTreeShmem->gc_queue_refcnt[my_slot], 1);
 		/* Reclaimable */
 		return EBI_TREE_INVALID_VERSION_OFFSET;
 	}
@@ -915,7 +980,7 @@ EbiSiftAndBind(TransactionId xmin,
 	}
 
 	ret = EBI_TREE_SEG_TO_VERSION_OFFSET(seg_id, seg_offset);
-
+	pg_atomic_fetch_sub_u64(&EbiTreeShmem->gc_queue_refcnt[my_slot], 1);
 	return ret;
 }
 
@@ -927,6 +992,11 @@ EbiLookupVersion(EbiTreeVersionOffset version_offset,
 	EbiTreeSegmentId seg_id;
 	EbiTreeSegmentOffset seg_offset;
 	int buf_id;
+#ifdef J3VM_PRINT
+	struct timespec starttime, endtime;
+	if (j3vm_print)
+		clock_gettime(CLOCK_MONOTONIC, &starttime);
+#endif
 
 	seg_id = EBI_TREE_VERSION_OFFSET_TO_SEG_ID(version_offset);
 	seg_offset = EBI_TREE_VERSION_OFFSET_TO_SEG_OFFSET(version_offset);
@@ -936,6 +1006,14 @@ EbiLookupVersion(EbiTreeVersionOffset version_offset,
 
 	// Read version to ret_value
 	buf_id = EbiTreeReadVersionRef(seg_id, seg_offset, tuple_size, ret_value);
+#ifdef J3VM_PRINT
+	if (j3vm_print)
+	{
+		clock_gettime(CLOCK_MONOTONIC, &endtime);
+		ebi_time += (endtime.tv_sec - starttime.tv_sec) * 1000 +
+							(double)(endtime.tv_nsec - starttime.tv_nsec) / 1000000;
+	}
+#endif
 
 	return buf_id;
 }
@@ -947,17 +1025,17 @@ EbiSegIsAlive(dsa_pointer dsa_ebitree, EbiTreeSegmentId seg_id)
 	bool ret;
 
 	/* Must be place before entering the EBI-tree */
-	my_slot = pg_atomic_read_u32(&EbiTreeShmem->curr_slot);
-	pg_atomic_fetch_add_u64(&EbiTreeShmem->gc_queue_refcnt[my_slot], 1);
-
-	pg_memory_barrier();
+//	my_slot = pg_atomic_read_u32(&EbiTreeShmem->curr_slot);
+//	pg_atomic_fetch_add_u64(&EbiTreeShmem->gc_queue_refcnt[my_slot], 1);
+//
+//	pg_memory_barrier();
 
 	ret = EbiSegIsAliveInternal(dsa_ebitree, seg_id);
 
 	pg_memory_barrier();
 
 	/* Must be place after traversing the EBI-tree */
-	pg_atomic_fetch_sub_u64(&EbiTreeShmem->gc_queue_refcnt[my_slot], 1);
+//	pg_atomic_fetch_sub_u64(&EbiTreeShmem->gc_queue_refcnt[my_slot], 1);
 
 	return ret;
 }
@@ -1162,4 +1240,46 @@ EbiPrintTreeRecursive(EbiNode node)
 	EbiPrintTreeRecursive(EbiConvertToNode(ebitree_dsa_area, node->right));
 }
 
+#ifdef JS_WIDTH
+void PrintAllTree(dsa_pointer dsa_curr, int level, FILE* fp) {
+	if (!DsaPointerIsValid(dsa_curr))
+		return;
+	EbiNode curr = EbiConvertToNode(ebitree_dsa_area, dsa_curr);
+
+	PrintAllTree(curr->left, level + 1, fp);
+
+	char tmp_buf[2048];
+	memset(tmp_buf, 0x00, sizeof(tmp_buf));
+	int index = 0;
+	for (int i = 0; i < level; ++i) {
+		fprintf(fp, "> ");
+	}
+	// seg_id, left_most
+	fprintf(fp, "%u:%u\n", curr->seg_id, curr->left_most);
+	
+	PrintAllTree(curr->right, level + 1, fp);
+}
+
+void PrintTreeToFile(int time) {
+	FILE* fp;
+	char filename[128];
+	EbiTree ebitree;
+	uint32 my_slot;
+	EbiNode node;
+	sprintf(filename, "treeshape.%08d", time);
+	fp = fopen(filename, "w");
+
+
+	ebitree = EbiConvertToTree(ebitree_dsa_area, EbiTreeShmem->ebitree);
+
+	my_slot = pg_atomic_read_u32(&EbiTreeShmem->curr_slot);
+	pg_atomic_fetch_add_u64(&EbiTreeShmem->gc_queue_refcnt[my_slot], 1);
+
+	node = EbiConvertToNode(ebitree_dsa_area, ebitree->root);
+	PrintAllTree(ebitree->root, 0, fp);
+	pg_atomic_fetch_sub_u64(&EbiTreeShmem->gc_queue_refcnt[my_slot], 1);
+
+	fclose(fp);
+}
+#endif
 #endif

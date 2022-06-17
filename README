@@ -1,3 +1,13 @@
+To build DIVA, please compile the project with the flag "DIVA" like below:
+$ ./configure --prefix=path_to_install CFLAGS="-DDIVA"
+
+You can parameterize the buffer size for p-leaf pages and ebi-tree version pages like below:
+$ ./configure --prefix=path_to_install CFLAGS="-DDIVA -DPLEAF_NUM_PAGE=10000 -DEBI_NUM_PAGE=10000"
+
+PLEAF_NUM_PAGE: the number of p-leaf buffer pages (x 4KiB)
+EBI_NUM_PAGE: the number of the ebi-tree buffer pages (x 8KiB)
+
+
 PostgreSQL Database Management System
 =====================================
 

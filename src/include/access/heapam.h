@@ -76,7 +76,7 @@ typedef struct HeapScanDescData
 	 * tuple when executing update query. Because of this, a transaction     
 	 * finding a visible version in a heap page releases the page latch      
 	 * right after it finds the tuple.                                       
-	 * For the implementation of the oviraptor, we do in-place update on     
+	 * For the implementation of the siro, we do in-place update on     
 	 * a heap tuple, and it incurs another race problem. A reader transaction
 	 * only stores the pointer of the visible heap tuple and then releases   
 	 * the page latch. Before retrieving the actual contents of the tuple,   

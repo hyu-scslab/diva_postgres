@@ -369,7 +369,7 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 
 #ifdef DIVA
 	Relation relation;
-	bool oviraptor;
+	bool siro;
 
 	/* JAESEON: I think it's not necessary */
 //	Bitmapset *bms_pk;
@@ -455,9 +455,9 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 
 #ifdef DIVA
 		relation = scan->rs_base.rs_rd;
-		oviraptor = IsOviraptor(relation);
+		siro = IsSiro(relation);
 
-		if (oviraptor)
+		if (siro)
 		{
 			HeapTupleData loctup;
 			Item meta_tup;
@@ -479,7 +479,7 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 			loctup.t_len = ItemIdGetLength(lpp);
 			ItemPointerSet(&(loctup.t_self), page, lineoff);
 
-			/* Oviraptor pages cannot be all_visible, so check visibility */
+			/* Siro pages cannot be all_visible, so check visibility */
 			valid = HeapTupleSatisfiesVisibility(&loctup, snapshot, buffer);
 
 			HeapCheckForSerializableConflictOut(valid, scan->rs_base.rs_rd,
@@ -1496,7 +1496,7 @@ heap_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot *s
 
 #ifdef DIVA
 	Relation relation;
-	bool oviraptor;
+	bool siro;
 #endif
 
 	/* Note: no locking manipulations needed */
@@ -1521,9 +1521,9 @@ heap_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot *s
 
 #ifdef DIVA
 	relation = scan->rs_base.rs_rd;
-	oviraptor = IsOviraptor(relation);
+	siro = IsSiro(relation);
 
-	if (oviraptor)
+	if (siro)
 		ExecStoreBufferHeapTuple(scan->rs_vistuples_copied[scan->rs_cindex],
 								slot,
 								scan->rs_cbuf);
@@ -1732,7 +1732,7 @@ heap_hot_search_buffer_with_vc(ItemPointer tid, Relation relation,
 	/* check if the line pointer is not used */
 	if (LP_OVR_IS_UNUSED(lp))
 	{
-		elog(ERROR, "item id is not used: %d", lp->lp_oviraptor);
+		elog(ERROR, "item id is not used: %d", lp->lp_siro);
 		return false;
 	}
 
@@ -1808,7 +1808,7 @@ heap_hot_search_buffer_with_vc(ItemPointer tid, Relation relation,
 	if ((is_left && !LP_OVR_IS_RIGHT(lp)) ||
 			(!is_left && !LP_OVR_IS_LEFT(lp)))
 	{
-		elog(ERROR, "next item id is invalid: %d", lp->lp_oviraptor);
+		elog(ERROR, "next item id is invalid: %d", lp->lp_siro);
 		return false;
 	}
 
@@ -2313,7 +2313,7 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	bool		all_visible_cleared = false;
 
 #ifdef DIVA
-	bool		oviraptor;
+	bool		siro;
 #endif
 	/*
 	 * Fill in tuple header fields and toast the tuple if necessary.
@@ -2328,9 +2328,9 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	 * this will also pin the requisite visibility map page.
 	 */
 #ifdef DIVA
-	oviraptor = IsOviraptor(relation);
+	siro = IsSiro(relation);
 
-	if (oviraptor)
+	if (siro)
 		buffer = RelationGetBufferForTuples(relation, heaptup->t_len,
 												InvalidBuffer, options, bistate,
 												&vmbuffer, NULL, 2);
@@ -2365,7 +2365,7 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	START_CRIT_SECTION();
 
 #ifdef DIVA
-	if (oviraptor)
+	if (siro)
 		RelationPutHeapTupleWithDummy(relation, buffer, heaptup,
 							(options & HEAP_INSERT_SPECULATIVE) != 0);
 	else
@@ -3006,7 +3006,7 @@ l1:
 	if (result == TM_Invisible)
 	{
 		/*
-		 * Because we are doing in-place update for oviraptor implementation,
+		 * Because we are doing in-place update for siro implementation,
 		 * oldtup could be invisible in this cases.
 		 *
 		 * 1. In a predecessor heap tuple search routine, we delivered any
@@ -3859,7 +3859,7 @@ heap_update_with_vc(Relation relation, ItemPointer otid, HeapTuple newtup,
 						infomask_new_tuple,
 						infomask2_new_tuple;
 
-	/* variables for oviraptor */
+	/* variables for siro */
 	/*
 	 *                         newtup
 	 *                           |
@@ -4041,7 +4041,7 @@ l2:
 	if (result == TM_Invisible)
 	{
 		/*
-		 * Because we are doing in-place update for oviraptor implementation,
+		 * Because we are doing in-place update for siro implementation,
 		 * oldtup could be invisible in this cases.
 		 *
 		 * 1. In a predecessor heap tuple search routine, we delivered any
@@ -4498,7 +4498,7 @@ l2:
 			/*
 			 * HEAP_XMAX_INVALID is set if the transaction with the id
 			 * xmax has aborted. In this case, another pair tuple of
-			 * oviraptor might be aborted tuple so that we avoid to
+			 * siro might be aborted tuple so that we avoid to
 			 * push it down to the version cluster.
 			 */
 			is_second_old_exist = false;
@@ -4585,7 +4585,7 @@ l2:
 		RelationPutHeapTupleInPlace(
 				relation, newbuf, offnum_second_old, heaptup, false);
 
-		/* Set the oviraptor flag of the line pointer */
+		/* Set the siro flag of the line pointer */
 		if (second_is_left)
 			LP_OVR_SET_LEFT(lp_second_old);
 		else

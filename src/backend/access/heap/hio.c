@@ -49,7 +49,7 @@ RelationPutHeapTupleWithDummy(Relation relation,
 	/* Add the tuple to the page */
 	pageHeader = BufferGetPage(buffer);
 
-	/* Returned offset number is for a left slot (not dummy) of oviraptor */
+	/* Returned offset number is for a left slot (not dummy) of siro */
 	offnum = PageAddItemWithDummy(pageHeader, (Item) tuple->t_data,
 			tuple->t_len, InvalidOffsetNumber, false, true);
 

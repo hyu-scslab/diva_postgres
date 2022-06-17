@@ -123,7 +123,7 @@ heapam_index_fetch_tuple(struct IndexFetchTableData *scan,
 	bool		got_heap_tuple;
 
 #ifdef DIVA
-	bool		oviraptor;
+	bool		siro;
 #endif
 
 	Assert(TTS_IS_BUFFERTUPLE(slot));
@@ -158,10 +158,10 @@ heapam_index_fetch_tuple(struct IndexFetchTableData *scan,
 	/* Obtain share-lock on the buffer so we can examine visibility */
 	LockBuffer(hscan->xs_cbuf, BUFFER_LOCK_SHARE);
 #ifdef DIVA
-	oviraptor = IsOviraptor(hscan->xs_base.rel);
+	siro = IsSiro(hscan->xs_base.rel);
 
 
-	if (oviraptor)
+	if (siro)
 	{
 		got_heap_tuple =
 			heap_hot_search_buffer_with_vc(tid,
@@ -207,7 +207,7 @@ heapam_index_fetch_tuple(struct IndexFetchTableData *scan,
 		slot->tts_tableOid = RelationGetRelid(scan->rel);
 
 #ifdef DIVA
-		if (oviraptor)
+		if (siro)
 			ExecStoreBufferHeapTuple(
 					bslot->base.copied_tuple, slot, hscan->xs_cbuf);
 		else
@@ -359,11 +359,11 @@ heapam_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 					TM_FailureData *tmfd, bool changingPart)
 {
 #ifdef DIVA
-	bool		oviraptor;
+	bool		siro;
 
-	oviraptor = IsOviraptor(relation);
+	siro = IsSiro(relation);
 
-	if (oviraptor)
+	if (siro)
 		/* heap deletion for vDriver. */
 		// JAESEON
 		return heap_delete_with_vc(relation, tid, cid, snapshot,
@@ -395,7 +395,7 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 	TM_Result	result;
 
 #ifdef DIVA
-	bool oviraptor;
+	bool siro;
 #endif
 
 	/* Update the tuple with table oid */
@@ -403,9 +403,9 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 	tuple->t_tableOid = slot->tts_tableOid;
 #ifdef DIVA
 
-	oviraptor = IsOviraptor(relation);
+	siro = IsSiro(relation);
 
-	if (oviraptor)
+	if (siro)
 		result = heap_update_with_vc(relation, otid, tuple, cid, snapshot,
 				crosscheck, wait, tmfd, lockmode);
 	else
@@ -428,7 +428,7 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 	 * If it's a HOT update, we mustn't insert new index entries.
 	 */
 #ifdef DIVA
-	if (oviraptor)
+	if (siro)
 		*update_indexes = false;
 	else
 		*update_indexes = result == TM_Ok && !HeapTupleIsHeapOnly(tuple);
@@ -2215,7 +2215,7 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 
 #ifdef DIVA
 	Relation  relation;
-	bool        oviraptor;
+	bool        siro;
 
 //	Bitmapset *bms_pk;
 //	Datum   primary_key;
@@ -2224,7 +2224,7 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 //	int     cache_id;
 
 	relation = scan->rs_rd;
-	oviraptor = IsOviraptor(relation);
+	siro = IsSiro(relation);
 
 #endif
 	hscan->rs_cindex = 0;
@@ -2288,7 +2288,7 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 			ItemPointerSet(&tid, page, offnum);
 
 #ifdef DIVA
-			if (oviraptor)
+			if (siro)
 			{
 				if (heap_hot_search_buffer_with_vc(
 							&tid, scan->rs_rd, buffer, snapshot, &heapTuple,
@@ -2327,7 +2327,7 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 			bool		valid;
 
 #ifdef DIVA
-			if (oviraptor)
+			if (siro)
 			{
 				Item meta_tup;
 				uint64 l_off, r_off;
@@ -2548,7 +2548,7 @@ heapam_scan_bitmap_next_tuple(TableScanDesc scan,
 
 #ifdef DIVA
 	Relation relation;
-	bool		oviraptor;
+	bool		siro;
 #endif
 	/*
 	 * Out of range?  If so, nothing more to look at on this page
@@ -2570,9 +2570,9 @@ heapam_scan_bitmap_next_tuple(TableScanDesc scan,
 
 #ifdef DIVA
 	relation = scan->rs_rd;
-	oviraptor = IsOviraptor(relation);
+	siro = IsSiro(relation);
 
-	if (oviraptor)
+	if (siro)
 		ExecStoreBufferHeapTuple(hscan->rs_vistuples_copied[hscan->rs_cindex],
 				slot,
 				hscan->rs_cbuf);

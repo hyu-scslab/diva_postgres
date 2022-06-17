@@ -66,7 +66,7 @@ extern Bitmapset *RelationGetIndexAttrBitmap(Relation relation,
 											 IndexAttrBitmapKind attrKind);
 
 #ifdef DIVA
-extern bool IsOviraptor(Relation relation);
+extern bool IsSiro(Relation relation);
 #endif
 
 extern void RelationGetExclusionInfo(Relation indexRelation,

@@ -28,7 +28,7 @@ typedef struct ItemIdData
 {
 	unsigned	lp_off:14,		/* offset to tuple (from start of page) */
 				lp_flags:2,		/* state of line pointer, see below */
-				lp_oviraptor:2,		/* representing OVIRAPTOR, see below */
+				lp_siro:2,		/* representing SIRO, see below */
 				lp_pflag:1,		/* representing PLEAF line pointer */
 				lp_len:13;		/* byte length of tuple */
 } ItemIdData;
@@ -37,15 +37,15 @@ typedef struct ItemIdData
  * 00: LEFT-OVR-USING, 01: RIGHT-OVR-USING
  * 10, 11 : OVR-UNUSED
  */
-#define LP_OVR_IS_LEFT(itemId)		(!((itemId)->lp_oviraptor & 0x1))
-#define LP_OVR_IS_RIGHT(itemId)		((itemId)->lp_oviraptor & 0x1)
-#define LP_OVR_IS_USING(itemId)		(!((itemId)->lp_oviraptor & 0x2))
-#define LP_OVR_IS_UNUSED(itemId)	((itemId)->lp_oviraptor & 0x2)
+#define LP_OVR_IS_LEFT(itemId)		(!((itemId)->lp_siro & 0x1))
+#define LP_OVR_IS_RIGHT(itemId)		((itemId)->lp_siro & 0x1)
+#define LP_OVR_IS_USING(itemId)		(!((itemId)->lp_siro & 0x2))
+#define LP_OVR_IS_UNUSED(itemId)	((itemId)->lp_siro & 0x2)
 
-#define LP_OVR_SET_LEFT(itemId)		((itemId)->lp_oviraptor &= 0x2) 
-#define LP_OVR_SET_RIGHT(itemId)	((itemId)->lp_oviraptor |= 0x1) 
-#define LP_OVR_SET_USING(itemId)	((itemId)->lp_oviraptor &= 0x1) 
-#define LP_OVR_SET_UNUSED(itemId)	((itemId)->lp_oviraptor |= 0x2)
+#define LP_OVR_SET_LEFT(itemId)		((itemId)->lp_siro &= 0x2) 
+#define LP_OVR_SET_RIGHT(itemId)	((itemId)->lp_siro |= 0x1) 
+#define LP_OVR_SET_USING(itemId)	((itemId)->lp_siro &= 0x1) 
+#define LP_OVR_SET_UNUSED(itemId)	((itemId)->lp_siro |= 0x2)
 
 #define LP_SET_PLEAF_FLAG(itemId)	((itemId)->lp_pflag = 1)
 #define LP_IS_PLEAF_FLAG(itemId)	((itemId)->lp_pflag)
@@ -172,7 +172,7 @@ typedef uint16 ItemLength;
 	(itemId)->lp_flags = LP_NORMAL,	\
 	(itemId)->lp_off = (off),	\
 	(itemId)->lp_len = (len),	\
-	(itemId)->lp_oviraptor = (0), \
+	(itemId)->lp_siro = (0), \
 	(itemId)->lp_pflag = (0) \
 )
 #else

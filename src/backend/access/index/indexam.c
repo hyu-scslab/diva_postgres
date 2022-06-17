@@ -613,7 +613,7 @@ bool
 index_getnext_slot(IndexScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 {
 #ifdef DIVA
-	bool		oviraptor;
+	bool		siro;
 #endif
 	for (;;)
 	{
@@ -640,10 +640,10 @@ index_getnext_slot(IndexScanDesc scan, ScanDirection direction, TupleTableSlot *
 #ifdef DIVA
 		/*
 		 * We only want to change the fetch routine for a relation
-		 * having oviraptor tuples
+		 * having siro tuples
 		 */
-		oviraptor = IsOviraptor(scan->xs_heapfetch->rel);
-		if (oviraptor)
+		siro = IsSiro(scan->xs_heapfetch->rel);
+		if (siro)
 			return index_fetch_heap(scan, slot);
 
 		if (index_fetch_heap(scan, slot))

@@ -48,7 +48,7 @@ typedef struct
 
 /* Local functions */
 #ifdef DIVA 
-static int  heap_prune_oviraptor(Relation relation, Buffer buffer,
+static int  heap_prune_siro(Relation relation, Buffer buffer,
 							OffsetNumber offnum,
 							TransactionId OldestXmin,
 							PruneState *prstate);
@@ -235,9 +235,9 @@ heap_page_prune(Relation relation, Buffer buffer, TransactionId OldestXmin,
 			continue;
 
 #ifdef DIVA 
-		if (IsOviraptor(relation))
+		if (IsSiro(relation))
 		{
-			ndeleted += heap_prune_oviraptor(relation, buffer, offnum,
+			ndeleted += heap_prune_siro(relation, buffer, offnum,
 					OldestXmin,
 					&prstate);
 		}
@@ -356,8 +356,8 @@ heap_page_prune(Relation relation, Buffer buffer, TransactionId OldestXmin,
 /*
  * Prune specified line pointer.
  *
- * If the item is an index-referenced tuple (i.e. leftside of oviraptor),
- * leftside & rightside tuples of oviraptor is pruned by marking flags of
+ * If the item is an index-referenced tuple (i.e. leftside of siro),
+ * leftside & rightside tuples of siro is pruned by marking flags of
  * linepointers as LP_DEAD.
  *
  * OldestXmin is the cutoff XID used to identify dead or recent dead tuples.
@@ -367,7 +367,7 @@ heap_page_prune(Relation relation, Buffer buffer, TransactionId OldestXmin,
  * TODO: Returned number is meeningless yet.
  */
 static int
-heap_prune_oviraptor(Relation relation, Buffer buffer, OffsetNumber offnum,
+heap_prune_siro(Relation relation, Buffer buffer, OffsetNumber offnum,
 		TransactionId OldestXmin,
 		PruneState *prstate)
 {
@@ -400,8 +400,8 @@ heap_prune_oviraptor(Relation relation, Buffer buffer, OffsetNumber offnum,
 		return ndeleted;
 	}
 
-	/* We only do if this tuple is leftside of oviraptor. */
-//	if (LP_OVR_IS_RIGHT(lp) || LP_IS_PLEAF_FLAG(lp)) // is left oviraptor?
+	/* We only do if this tuple is leftside of siro. */
+//	if (LP_OVR_IS_RIGHT(lp) || LP_IS_PLEAF_FLAG(lp)) // is left siro?
 //	{
 //		return ndeleted;
 //	}

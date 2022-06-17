@@ -236,7 +236,7 @@ typedef struct RelationData
 	struct PgStat_TableStatus *pgstat_info; /* statistics collection area */
 #ifdef DIVA
 	/*                                                                           
-	 * We want to apply oviraptor to only heap tables but not system tables.     
+	 * We want to apply siro to only heap tables but not system tables.     
 	 * This variable is set false in the RelationBuildDesc() function, and       
 	 * set true in the systable_beginscan() & systable_beginscan_ordered()       
 	 * functions. We assume non system tables is never scanned by systable_*     

@@ -6411,12 +6411,12 @@ unlink_initfile(const char *initfilename, int elevel)
 
 #ifdef DIVA
 /*
- * Whether tuples in this relation is oviraptor or not is found out
+ * Whether tuples in this relation is siro or not is found out
  * from the number of index about the relation. If the number is one,
- * it means this relation is oviraptor.
- * Don't apply oviraptor to system tables.
+ * it means this relation is siro.
+ * Don't apply siro to system tables.
  */
-bool IsOviraptor(Relation relation)
+bool IsSiro(Relation relation)
 {
 	if (relation == NULL)
 		return false;

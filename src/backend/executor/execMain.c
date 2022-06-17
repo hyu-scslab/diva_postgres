@@ -297,16 +297,16 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
  *
  * ----------------------------------------------------------------
  */
-#ifdef J3VM_CHSTAT
+#ifdef DIVA_CHSTAT
 bool j3vm_stat_is_olap;
 int j3vm_stat_call_depth;
-#endif /* J3VM_CHSTAT */
+#endif /* DIVA_CHSTAT */
 void
 ExecutorRun(QueryDesc *queryDesc,
 			ScanDirection direction, uint64 count,
 			bool execute_once)
 {
-#ifdef J3VM_CHSTAT
+#ifdef DIVA_CHSTAT
     struct timespec start, end;
 
 	/* Distinguish OLAP queries */
@@ -323,14 +323,14 @@ ExecutorRun(QueryDesc *queryDesc,
 	{
 		j3vm_stat_is_olap = false;
 	}
-#endif /* J3VM_CHSTAT */
+#endif /* DIVA_CHSTAT */
 
 	if (ExecutorRun_hook)
 		(*ExecutorRun_hook) (queryDesc, direction, count, execute_once);
 	else
 		standard_ExecutorRun(queryDesc, direction, count, execute_once);
 
-#ifdef J3VM_CHSTAT
+#ifdef DIVA_CHSTAT
 	/* Distinguish OLAP queries */
 	if (queryDesc->sourceText[1] == '-' &&
 		queryDesc->sourceText[2] == '-' &&
@@ -390,7 +390,7 @@ ExecutorRun(QueryDesc *queryDesc,
 		fclose(fp);
 	}
 	j3vm_stat_is_olap = false;
-#endif /* J3VM_CHSTAT */
+#endif /* DIVA_CHSTAT */
 }
 
 void
@@ -1696,7 +1696,7 @@ ExecutePlan(EState *estate,
 	TupleTableSlot *slot;
 	uint64		current_tuple_count;
 
-#ifdef J3VM /* USEFUL BREAKPOINT */
+#ifdef DIVA /* USEFUL BREAKPOINT */
 	curr_cmdtype = operation;
 #endif
 	/*

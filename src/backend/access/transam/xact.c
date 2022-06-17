@@ -68,7 +68,7 @@
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
 
-#ifdef J3VM
+#ifdef DIVA
 #include "storage/ebi_tree.h"
 #endif
 /*
@@ -195,7 +195,7 @@ typedef struct TransactionStateData
 	int			parallelModeLevel;	/* Enter/ExitParallelMode counter */
 	bool		chain;			/* start a new block after this one */
 	struct TransactionStateData *parent;	/* back link to parent */
-#ifdef J3VM
+#ifdef DIVA
 	dsa_pointer ebiNode; /* back link to bounded EBI tree */
 #endif
 } TransactionStateData;
@@ -2262,7 +2262,7 @@ CommitTransaction(void)
 	AtEOXact_PgStat(true, is_parallel_worker);
 	AtEOXact_Snapshot(true, false);
 	AtEOXact_ApplyLauncher(true);
-#ifdef J3VM
+#ifdef DIVA
 	UnbindTransaction();
 #endif
 	pgstat_report_xact_timestamp(0);
@@ -2282,7 +2282,7 @@ CommitTransaction(void)
 	s->childXids = NULL;
 	s->nChildXids = 0;
 	s->maxChildXids = 0;
-#ifdef J3VM
+#ifdef DIVA
 	s->ebiNode = InvalidDsaPointer;
 #endif
 
@@ -2769,7 +2769,7 @@ AbortTransaction(void)
 		AtEOXact_ApplyLauncher(false);
 		pgstat_report_xact_timestamp(0);
 	}
-#ifdef J3VM
+#ifdef DIVA
 	UnbindTransaction();
 	s->ebiNode = InvalidDsaPointer;
 #endif
@@ -6041,7 +6041,7 @@ xact_redo(XLogReaderState *record)
 		elog(PANIC, "xact_redo: unknown op code %u", info);
 }
 
-#ifdef J3VM
+#ifdef DIVA
 void
 BindTransaction(Snapshot snapshot)
 {

@@ -26,7 +26,7 @@
  *-------------------------------------------------------------------------
  */
 
-#ifdef J3VM
+#ifdef DIVA
 #include "postgres.h"
 
 #include <fcntl.h>
@@ -543,4 +543,4 @@ EbiTreeBufUnrefInternal(EbiTreeBufDesc *buf)
 	pg_atomic_fetch_sub_u32(&buf->refcnt, 1);
 }
 
-#endif /* J3VM */
+#endif /* DIVA */

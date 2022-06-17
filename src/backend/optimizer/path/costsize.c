@@ -122,7 +122,7 @@ Cost		disable_cost = 1.0e10;
 
 int			max_parallel_workers_per_gather = 2;
 
-#ifdef J3VM_PRINT
+#ifdef DIVA_PRINT
 bool		j3vm_print = false;
 #endif
 

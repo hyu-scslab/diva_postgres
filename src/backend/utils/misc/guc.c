@@ -931,7 +931,7 @@ static const unit_conversion time_unit_conversion_table[] =
 
 static struct config_bool ConfigureNamesBool[] =
 {
-#ifdef J3VM_PRINT
+#ifdef DIVA_PRINT
 	{
 		{"j3vm_print", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("print messages for breakdown."),

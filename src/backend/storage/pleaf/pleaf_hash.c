@@ -25,7 +25,7 @@
  *
  *-------------------------------------------------------------------------
  */
-#ifdef J3VM
+#ifdef DIVA
 #include "postgres.h"
 
 #include "utils/snapmgr.h"
@@ -182,5 +182,5 @@ PLeafHashDelete(const PLeafTag *tagPtr, uint32 hashcode)
 		elog(ERROR, "shared pleaf hash table corrupted");
 }
 
-#endif /* J3VM */
+#endif /* DIVA */
 

@@ -25,7 +25,7 @@
  *
  *-------------------------------------------------------------------------
  */
-#ifdef J3VM
+#ifdef DIVA
 #include "postgres.h"
 
 #include <assert.h>

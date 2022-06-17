@@ -5494,7 +5494,7 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 				table_tuple_insert(newrel, insertslot, mycid,
 								   ti_options, bistate);
 
-#ifdef J3VM
+#ifdef DIVA
 			if (((HeapScanDesc)scan)->rs_cindex
 					== ((HeapScanDesc)scan)->rs_ntuples - 1)
 			{
@@ -5505,13 +5505,13 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 			}
 #else
 			ResetExprContext(econtext);
-#endif /* J3VM */
+#endif /* DIVA */
 
 			CHECK_FOR_INTERRUPTS();
 		}
-#ifdef J3VM
+#ifdef DIVA
 		ResetExprContext(econtext);
-#endif /* J3VM */
+#endif /* DIVA */
 
 		MemoryContextSwitchTo(oldCxt);
 		table_endscan(scan);

@@ -763,7 +763,7 @@ lazy_scan_heap(Relation onerel, VacuumParams *params, LVRelStats *vacrelstats,
 	BlockNumber nblocks,
 				blkno;
 	HeapTupleData tuple;
-#ifdef J3VM
+#ifdef DIVA
 #else
 	TransactionId relfrozenxid = onerel->rd_rel->relfrozenxid;
 	TransactionId relminmxid = onerel->rd_rel->relminmxid;
@@ -941,7 +941,7 @@ lazy_scan_heap(Relation onerel, VacuumParams *params, LVRelStats *vacrelstats,
 		Page		page;
 		OffsetNumber offnum,
 					maxoff;
-#ifdef J3VM
+#ifdef DIVA
 		bool		hastup;
 #else
 		bool		tupgone,
@@ -1306,7 +1306,7 @@ lazy_scan_heap(Relation onerel, VacuumParams *params, LVRelStats *vacrelstats,
 			tuple.t_len = ItemIdGetLength(itemid);
 			tuple.t_tableOid = RelationGetRelid(onerel);
 
-#ifdef J3VM
+#ifdef DIVA
 			/*
 			 * Checking vacummable about this tuple is already done
 			 * in heap_page_prune(). We don't need to do redundant work.

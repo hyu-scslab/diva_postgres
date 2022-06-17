@@ -148,7 +148,7 @@ static const char *const BuiltinTrancheNames[] = {
 	"BufferContent",
 	/* LWTRANCHE_BUFFER_IO: */
 	"BufferIO",
-#ifdef J3VM
+#ifdef DIVA
 	/* LWTRANCHE_PLEAF_BUFFER_IO: */
 	"PLeafBufferIO",
 	/* LWTRANCHE_EBI_NAMED_LOCK: */
@@ -162,7 +162,7 @@ static const char *const BuiltinTrancheNames[] = {
 	"LockFastPath",
 	/* LWTRANCHE_BUFFER_MAPPING: */
 	"BufferMapping",
-#ifdef J3VM
+#ifdef DIVA
 	/* LWTRANCHE_PLEAF_MAPPING: */
 	"PLeafMapping",
 	/* LWTRANCHE_EBI_TREE_MAPPING: */
@@ -543,7 +543,7 @@ InitializeLWLocks(void)
 	for (id = 0; id < NUM_BUFFER_PARTITIONS; id++, lock++)
 		LWLockInitialize(&lock->lock, LWTRANCHE_BUFFER_MAPPING);
 
-#ifdef J3VM
+#ifdef DIVA
 	/* Initialize pleaf-buffer mapping LWLocks in main array */
 	lock = MainLWLockArray + NUM_INDIVIDUAL_LWLOCKS + NUM_BUFFER_PARTITIONS;
 	for (id = 0; id < NUM_PLEAF_PARTITIONS; id++, lock++)

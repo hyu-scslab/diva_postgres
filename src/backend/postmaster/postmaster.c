@@ -137,7 +137,7 @@
 #include "storage/spin.h"
 #endif
 
-#ifdef J3VM
+#ifdef DIVA
 #include "storage/ebi_tree.h"
 #include "postmaster/ebi_tree_process.h"
 #endif
@@ -254,7 +254,7 @@ static pid_t StartupPID = 0,
 			BgWriterPID = 0,
 			CheckpointerPID = 0,
 			WalWriterPID = 0,
-#ifdef J3VM
+#ifdef DIVA
 			EbiTreePID = 0,
 			PLeafMgrPID = 0,
 #endif
@@ -562,7 +562,7 @@ static void ShmemBackendArrayRemove(Backend *bn);
 #define StartBackgroundWriter() StartChildProcess(BgWriterProcess)
 #define StartCheckpointer()		StartChildProcess(CheckpointerProcess)
 #define StartWalWriter()		StartChildProcess(WalWriterProcess)
-#ifdef J3VM
+#ifdef DIVA
 #define StartEbiTree()		StartChildProcess(EbiTreeProcess)
 #define StartPLeafManager()		StartChildProcess(PLeafManagerProcess)
 #endif
@@ -1787,7 +1787,7 @@ ServerLoop(void)
 		if (WalWriterPID == 0 && pmState == PM_RUN)
 			WalWriterPID = StartWalWriter();
 
-#ifdef J3VM
+#ifdef DIVA
 		if (EbiTreePID == 0 && pmState == PM_RUN)
 			EbiTreePID = StartEbiTree();
 
@@ -2732,7 +2732,7 @@ SIGHUP_handler(SIGNAL_ARGS)
 			signal_child(CheckpointerPID, SIGHUP);
 		if (WalWriterPID != 0)
 			signal_child(WalWriterPID, SIGHUP);
-#ifdef J3VM
+#ifdef DIVA
 		if (PLeafMgrPID != 0)
 			signal_child(PLeafMgrPID, SIGHUP);
 		if (EbiTreePID != 0)
@@ -3065,7 +3065,7 @@ reaper(SIGNAL_ARGS)
 				BgWriterPID = StartBackgroundWriter();
 			if (WalWriterPID == 0)
 				WalWriterPID = StartWalWriter();
-#ifdef J3VM
+#ifdef DIVA
 			if (EbiTreePID == 0)
 				EbiTreePID = StartEbiTree();
 
@@ -3183,7 +3183,7 @@ reaper(SIGNAL_ARGS)
 			continue;
 		}
 
-#ifdef J3VM
+#ifdef DIVA
 		/*
 		 * Was it the EBI tree?  Normal exit can be ignored; we'll start a
 		 * new one at the next iteration of the postmaster's main loop, if
@@ -3684,7 +3684,7 @@ HandleChildCrash(int pid, int exitstatus, const char *procname)
 								 (int) WalWriterPID)));
 		signal_child(WalWriterPID, (SendStop ? SIGSTOP : SIGQUIT));
 	}
-#ifdef J3VM
+#ifdef DIVA
 	/* Take care of the ebi tree too */
 	if (pid == EbiTreePID)
 		EbiTreePID = 0;
@@ -3899,7 +3899,7 @@ PostmasterStateMachine(void)
 		/* and the walwriter too */
 		if (WalWriterPID != 0)
 			signal_child(WalWriterPID, SIGTERM);
-#ifdef J3VM
+#ifdef DIVA
 		/* and the pleaf manager too */
 		if (PLeafMgrPID != 0)
 			signal_child(PLeafMgrPID, SIGTERM);
@@ -3944,7 +3944,7 @@ PostmasterStateMachine(void)
 			(CheckpointerPID == 0 ||
 			 (!FatalError && Shutdown < ImmediateShutdown)) &&
 			WalWriterPID == 0 &&
-#ifdef J3VM
+#ifdef DIVA
 			EbiTreePID == 0 &&
 			PLeafMgrPID == 0 &&
 #endif
@@ -4041,7 +4041,7 @@ PostmasterStateMachine(void)
 			Assert(BgWriterPID == 0);
 			Assert(CheckpointerPID == 0);
 			Assert(WalWriterPID == 0);
-#ifdef J3VM
+#ifdef DIVA
 			Assert(EbiTreePID == 0);
 			Assert(PLeafMgrPID == 0);
 #endif
@@ -4231,7 +4231,7 @@ TerminateChildren(int signal)
 		signal_child(CheckpointerPID, signal);
 	if (WalWriterPID != 0)
 		signal_child(WalWriterPID, signal);
-#ifdef J3VM
+#ifdef DIVA
 	if (PLeafMgrPID != 0)
 		signal_child(PLeafMgrPID, signal);
 	if (EbiTreePID != 0)
@@ -5644,7 +5644,7 @@ StartChildProcess(AuxProcType type)
 				ereport(LOG,
 						(errmsg("could not fork WAL writer process: %m")));
 				break;
-#ifdef J3VM
+#ifdef DIVA
 			case EbiTreeProcess:
 				ereport(LOG,
 						(errmsg("could not fork EBI tree process: %m")));

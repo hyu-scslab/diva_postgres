@@ -46,7 +46,7 @@
 #include <signal.h>
 
 #include "access/clog.h"
-#ifdef J3VM
+#ifdef DIVA
 #include "access/parallel.h"
 #endif
 #include "access/subtrans.h"
@@ -67,7 +67,7 @@
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
 
-#ifdef J3VM
+#ifdef DIVA
 #include "postmaster/ebi_tree_process.h"
 #endif
 
@@ -1507,7 +1507,7 @@ GetMaxSnapshotSubxidCount(void)
  * Note: this function should probably not be called with an argument that's
  * not statically allocated (see xip allocation below).
  */
-#ifdef J3VM
+#ifdef DIVA
 Snapshot
 GetSnapshotData(Snapshot snapshot, bool is_txn)
 #else
@@ -1719,7 +1719,7 @@ GetSnapshotData(Snapshot snapshot)
 	if (!TransactionIdIsValid(MyPgXact->xmin))
 		MyPgXact->xmin = TransactionXmin = xmin;
 
-#ifdef J3VM
+#ifdef DIVA
 	snapshot->xmin = xmin;
 	snapshot->xmax = xmax;
 	snapshot->xcnt = count;
@@ -1743,7 +1743,7 @@ GetSnapshotData(Snapshot snapshot)
 
 	LWLockRelease(ProcArrayLock);
 
-#ifdef J3VM
+#ifdef DIVA
 	if ((!(IsInParallelMode() || IsParallelWorker())) && is_txn)
 		(void) GetCurrentTransactionId();
 #endif
@@ -1779,7 +1779,7 @@ GetSnapshotData(Snapshot snapshot)
 
 	RecentXmin = xmin;
 
-#ifndef J3VM
+#ifndef DIVA
 	snapshot->xmin = xmin;
 	snapshot->xmax = xmax;
 	snapshot->xcnt = count;
@@ -2290,7 +2290,7 @@ GetOldestSafeDecodingTransactionId(bool catalogOnly)
 	return oldestSafeXid;
 }
 
-#ifdef J3VM
+#ifdef DIVA
 TransactionId
 PLeafGetOldestActiveTransactionId(void)
 {

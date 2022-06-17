@@ -102,7 +102,7 @@ table_beginscan_catalog(Relation relation, int nkeys, struct ScanKeyData *key)
 	Oid			relid = RelationGetRelid(relation);
 	Snapshot	snapshot = RegisterSnapshot(GetCatalogSnapshot(relid));
 
-#ifdef J3VM
+#ifdef DIVA
 	relation->is_systable = true;
 #endif
 

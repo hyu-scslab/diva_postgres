@@ -142,9 +142,9 @@ extern char *ExportSnapshot(Snapshot snapshot);
  * Utility functions for implementing visibility routines in table AMs.
  */
 extern bool XidInMVCCSnapshot(TransactionId xid, Snapshot snapshot);
-#ifdef J3VM
+#ifdef DIVA
 extern bool XidInMVCCSnapshotForEBI(TransactionId xid, Snapshot snapshot);
-#endif /* J3VM */
+#endif /* DIVA */
 
 /* Support for catalog timetravel for logical decoding */
 struct HTAB;

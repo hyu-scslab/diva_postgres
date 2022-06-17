@@ -225,7 +225,7 @@ shmem_exit(int code)
 {
 	shmem_exit_inprogress = true;
 
-#ifdef J3VM /* DetachDsa of ours in here */
+#ifdef DIVA /* DetachDsa of ours in here */
 #endif
 	/*
 	 * Call before_shmem_exit callbacks.

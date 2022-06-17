@@ -23,7 +23,7 @@
  * that does not have storage, independently of its lp_flags state.
  */
 
-#ifdef J3VM
+#ifdef DIVA
 typedef struct ItemIdData
 {
 	unsigned	lp_off:14,		/* offset to tuple (from start of page) */
@@ -166,7 +166,7 @@ typedef uint16 ItemLength;
  *		Set the item identifier to be NORMAL, with the specified storage.
  *		Beware of multiple evaluations of itemId!
  */
-#ifdef J3VM
+#ifdef DIVA
 #define ItemIdSetNormal(itemId, off, len) \
 ( \
 	(itemId)->lp_flags = LP_NORMAL,	\

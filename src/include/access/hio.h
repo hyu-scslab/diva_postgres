@@ -35,7 +35,7 @@ typedef struct BulkInsertStateData
 
 extern void RelationPutHeapTuple(Relation relation, Buffer buffer,
 								 HeapTuple tuple, bool token);
-#ifdef J3VM
+#ifdef DIVA
 extern void RelationPutHeapTupleWithDummy(Relation relation, Buffer buffer,
 								HeapTuple tuple, bool token);
 extern void RelationPutHeapTupleInPlace(Relation relation, Buffer buffer,

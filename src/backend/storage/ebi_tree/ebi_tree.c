@@ -26,7 +26,7 @@
  *
  *-------------------------------------------------------------------------
  */
-#ifdef J3VM
+#ifdef DIVA
 #include "postgres.h"
 
 #include "storage/lwlock.h"
@@ -39,7 +39,7 @@
 #include "utils/snapmgr.h"
 #include "access/xact.h"
 
-#ifdef J3VM_PRINT
+#ifdef DIVA_PRINT
 #include "optimizer/cost.h"
 #endif
 
@@ -1004,7 +1004,7 @@ EbiLookupVersion(EbiTreeVersionOffset version_offset,
 	EbiTreeSegmentId seg_id;
 	EbiTreeSegmentOffset seg_offset;
 	int buf_id;
-#ifdef J3VM_PRINT
+#ifdef DIVA_PRINT
 	struct timespec starttime, endtime;
 	if (j3vm_print)
 		clock_gettime(CLOCK_MONOTONIC, &starttime);
@@ -1018,7 +1018,7 @@ EbiLookupVersion(EbiTreeVersionOffset version_offset,
 
 	// Read version to ret_value
 	buf_id = EbiTreeReadVersionRef(seg_id, seg_offset, tuple_size, ret_value);
-#ifdef J3VM_PRINT
+#ifdef DIVA_PRINT
 	if (j3vm_print)
 	{
 		clock_gettime(CLOCK_MONOTONIC, &endtime);

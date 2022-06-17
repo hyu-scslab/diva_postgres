@@ -78,7 +78,7 @@ extern void ExpireOldKnownAssignedTransactionIds(TransactionId xid);
 extern int	GetMaxSnapshotXidCount(void);
 extern int	GetMaxSnapshotSubxidCount(void);
 
-#ifdef J3VM
+#ifdef DIVA
 extern Snapshot GetSnapshotData(Snapshot snapshot, bool is_txn);
 #else
 extern Snapshot GetSnapshotData(Snapshot snapshot);
@@ -96,7 +96,7 @@ extern TransactionId GetOldestXmin(Relation rel, int flags);
 extern TransactionId GetOldestActiveTransactionId(void);
 extern TransactionId GetOldestSafeDecodingTransactionId(bool catalogOnly);
 
-#ifdef J3VM
+#ifdef DIVA
 extern TransactionId PLeafGetOldestActiveTransactionId(void);
 extern TransactionId PLeafGetMaxTransactionId(void);
 extern TransactionId EbiGetMaxTransactionId(void);

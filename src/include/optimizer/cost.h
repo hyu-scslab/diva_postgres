@@ -47,7 +47,7 @@ typedef enum
 /* parameter variables and flags (see also optimizer.h) */
 extern PGDLLIMPORT Cost disable_cost;
 extern PGDLLIMPORT int max_parallel_workers_per_gather;
-#ifdef J3VM_PRINT
+#ifdef DIVA_PRINT
 extern PGDLLIMPORT bool j3vm_print;
 #endif
 

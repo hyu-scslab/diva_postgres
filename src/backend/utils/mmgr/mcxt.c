@@ -798,7 +798,7 @@ MemoryContextAlloc(MemoryContext context, Size size)
 	void	   *ret;
 
 	AssertArg(MemoryContextIsValid(context));
-#ifdef J3VM
+#ifdef DIVA
 	/* Ignore the assertion */
 	if (!(CritSectionCount == 0 || (context)->allowInCritSection))
 	{

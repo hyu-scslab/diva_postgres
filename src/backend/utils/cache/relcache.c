@@ -1251,7 +1251,7 @@ RelationBuildDesc(Oid targetRelId, bool insertIt)
 	MemoryContextDelete(tmpcxt);
 #endif
 
-#ifdef J3VM
+#ifdef DIVA
 	relation->is_systable = false;
 #endif
 
@@ -6409,7 +6409,7 @@ unlink_initfile(const char *initfilename, int elevel)
 }
 
 
-#ifdef J3VM
+#ifdef DIVA
 /*
  * Whether tuples in this relation is oviraptor or not is found out
  * from the number of index about the relation. If the number is one,

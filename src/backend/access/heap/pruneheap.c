@@ -26,7 +26,7 @@
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
 
-#ifdef J3VM
+#ifdef DIVA
 #include "storage/pleaf.h"
 #endif
 
@@ -47,7 +47,7 @@ typedef struct
 } PruneState;
 
 /* Local functions */
-#ifdef J3VM 
+#ifdef DIVA 
 static int  heap_prune_oviraptor(Relation relation, Buffer buffer,
 							OffsetNumber offnum,
 							TransactionId OldestXmin,
@@ -125,7 +125,7 @@ heap_page_prune_opt(Relation relation, Buffer buffer)
 	 * Forget it if page is not hinted to contain something prunable that's
 	 * older than OldestXmin.
 	 */
-#ifdef J3VM
+#ifdef DIVA
 	/* Keep on through the below code to mark the hint bits of tuples */
 #else
 	if (!PageIsPrunable(page, OldestXmin))
@@ -234,7 +234,7 @@ heap_page_prune(Relation relation, Buffer buffer, TransactionId OldestXmin,
 		if (!ItemIdIsUsed(itemid) || ItemIdIsDead(itemid))
 			continue;
 
-#ifdef J3VM 
+#ifdef DIVA 
 		if (IsOviraptor(relation))
 		{
 			ndeleted += heap_prune_oviraptor(relation, buffer, offnum,
@@ -352,7 +352,7 @@ heap_page_prune(Relation relation, Buffer buffer, TransactionId OldestXmin,
 	return ndeleted;
 }
 
-#ifdef J3VM 
+#ifdef DIVA 
 /*
  * Prune specified line pointer.
  *

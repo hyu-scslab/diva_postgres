@@ -537,10 +537,10 @@ ProcessUtility(PlannedStmt *pstmt,
  * example, because we might need to refresh the event trigger cache,
  * which requires being in a valid transaction.
  */
-#ifdef J3VM_CHSTAT
+#ifdef DIVA_CHSTAT
 uint64_t j3vm_stat_cnt_neword = 0;
 uint64_t j3vm_stat_print_sec = 0;
-#endif /*J3VM_CHSTAT */
+#endif /*DIVA_CHSTAT */
 void
 standard_ProcessUtility(PlannedStmt *pstmt,
 						const char *queryString,
@@ -556,7 +556,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 	ParseState *pstate;
 	int			readonly_flags;
 
-#ifdef J3VM_CHSTAT
+#ifdef DIVA_CHSTAT
 	/* Measure the number of NEW ORDER transactions per second */
 	if (strncmp(queryString, "call neword", 11) == 0)
 	{
@@ -577,7 +577,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 			j3vm_stat_cnt_neword = 0;
 		}
 	}
-#endif /* J3VM_CHSTAT */
+#endif /* DIVA_CHSTAT */
 
 
 	/* This can recurse, so check for excessive recursion */

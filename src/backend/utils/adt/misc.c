@@ -40,10 +40,10 @@
 #include "utils/lsyscache.h"
 #include "utils/ruleutils.h"
 #include "utils/timestamp.h"
-#ifdef J3VM
+#ifdef DIVA
 #include "storage/ebi_tree.h"
 #include "postmaster/ebi_tree_process.h"
-#endif /* J3VM */
+#endif /* DIVA */
 
 /*
  * Common subroutine for num_nulls() and num_nonnulls().
@@ -852,7 +852,7 @@ pg_get_replica_identity_index(PG_FUNCTION_ARGS)
 	else
 		PG_RETURN_NULL();
 }
-#ifdef J3VM
+#ifdef DIVA
 Datum
 ebi_tree_print(PG_FUNCTION_ARGS)
 {
@@ -876,4 +876,4 @@ ebi_tree_print(PG_FUNCTION_ARGS)
 
     PG_RETURN_NULL();
 }
-#endif /* J3VM */
+#endif /* DIVA */

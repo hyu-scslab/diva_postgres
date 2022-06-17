@@ -131,7 +131,7 @@ heap_compute_data_size(TupleDesc tupleDesc,
     
 		val = values[i];
 
-#ifdef J3VM 
+#ifdef DIVA 
 		/* 
 		 * For SIRO versioning, take into account the null attributes to calculate
 		 * the size of the records.
@@ -150,7 +150,7 @@ heap_compute_data_size(TupleDesc tupleDesc,
 #else
 		if (isnull[i])
 			continue;
-#endif /* J3VM */
+#endif /* DIVA */
 
 		atti = TupleDescAttr(tupleDesc, i);
 
@@ -329,9 +329,9 @@ heap_fill_tuple(TupleDesc tupleDesc,
 	int			bitmask;
 	int			i;
 	int			numberOfAttributes = tupleDesc->natts;
-#ifdef J3VM
+#ifdef DIVA
 	bool		has_null = 0;
-#endif /* J3VM */
+#endif /* DIVA */
 
 #ifdef USE_ASSERT_CHECKING
 	char	   *start = data;
@@ -362,13 +362,13 @@ heap_fill_tuple(TupleDesc tupleDesc,
 				 infomask,
 				 values ? values[i] : PointerGetDatum(NULL),
 				 isnull ? isnull[i] : true);
-#ifdef J3VM
+#ifdef DIVA
 		if (isnull && isnull[i])
 			has_null = true;
 #endif /* J3Vm */
 	}
 
-#ifdef J3VM
+#ifdef DIVA
 	if (!has_null)
 		Assert((data - start) == data_size);
 #else
@@ -1084,7 +1084,7 @@ heap_form_tuple(TupleDesc tupleDescriptor,
 	 */
 	len = offsetof(HeapTupleHeaderData, t_bits);
 
-#ifdef J3VM 
+#ifdef DIVA 
 	/*
 	 * for fixed size row, we always put the null bitmap even if
 	 * there is no null attribute at all in the tuple.
@@ -1093,7 +1093,7 @@ heap_form_tuple(TupleDesc tupleDescriptor,
 #else
 	if (hasnull)
 		len += BITMAPLEN(numberOfAttributes);
-#endif /* J3VM */
+#endif /* DIVA */
 
 	hoff = len = MAXALIGN(len); /* align user data safely */
 

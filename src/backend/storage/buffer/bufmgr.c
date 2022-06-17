@@ -3741,7 +3741,7 @@ LockBuffer(Buffer buffer, int mode)
 		elog(ERROR, "unrecognized buffer lock mode: %d", mode);
 }
 
-#ifdef J3VM
+#ifdef DIVA
 /*
  * See heap_update_with_vc()
  */

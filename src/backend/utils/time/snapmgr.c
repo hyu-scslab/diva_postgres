@@ -346,7 +346,7 @@ GetTransactionSnapshot(void)
 			if (IsolationIsSerializable())
 				CurrentSnapshot = GetSerializableTransactionSnapshot(&CurrentSnapshotData);
 			else
-#ifdef J3VM
+#ifdef DIVA
 				CurrentSnapshot = GetSnapshotData(&CurrentSnapshotData, true);
 #else
 				CurrentSnapshot = GetSnapshotData(&CurrentSnapshotData);
@@ -359,7 +359,7 @@ GetTransactionSnapshot(void)
 			pairingheap_add(&RegisteredSnapshots, &FirstXactSnapshot->ph_node);
 		}
 		else
-#ifdef J3VM
+#ifdef DIVA
 			CurrentSnapshot = GetSnapshotData(&CurrentSnapshotData, false);
 #else
 			CurrentSnapshot = GetSnapshotData(&CurrentSnapshotData);
@@ -373,7 +373,7 @@ GetTransactionSnapshot(void)
 
 	/* Don't allow catalog snapshot to be older than xact snapshot. */
 	InvalidateCatalogSnapshot();
-#ifdef J3VM
+#ifdef DIVA
 	CurrentSnapshot = GetSnapshotData(&CurrentSnapshotData, true);
 #else
 	CurrentSnapshot = GetSnapshotData(&CurrentSnapshotData);
@@ -408,7 +408,7 @@ GetLatestSnapshot(void)
 	if (!FirstSnapshotSet)
 		return GetTransactionSnapshot();
 
-#ifdef J3VM
+#ifdef DIVA
 	SecondarySnapshot = GetSnapshotData(&SecondarySnapshotData, true);
 #else
 	SecondarySnapshot = GetSnapshotData(&SecondarySnapshotData);
@@ -492,7 +492,7 @@ GetNonHistoricCatalogSnapshot(Oid relid)
 	if (CatalogSnapshot == NULL)
 	{
 		/* Get new snapshot. */
-#ifdef J3VM
+#ifdef DIVA
 		CatalogSnapshot = GetSnapshotData(&CatalogSnapshotData, false);
 #else
 		CatalogSnapshot = GetSnapshotData(&CatalogSnapshotData);
@@ -602,7 +602,7 @@ SetTransactionSnapshot(Snapshot sourcesnap, VirtualTransactionId *sourcevxid,
 	 * two variables in exported snapshot files, but it seems better to have
 	 * snapshot importers compute reasonably up-to-date values for them.)
 	 */
-#ifdef J3VM
+#ifdef DIVA
 	CurrentSnapshot = GetSnapshotData(&CurrentSnapshotData, true);
 #else
 	CurrentSnapshot = GetSnapshotData(&CurrentSnapshotData);
@@ -2369,7 +2369,7 @@ XidInMVCCSnapshot(TransactionId xid, Snapshot snapshot)
 	return false;
 }
 
-#ifdef J3VM
+#ifdef DIVA
 /*
  * XidInMVCCSnapshotForEBI
  *
@@ -2499,4 +2499,4 @@ XidInMVCCSnapshotForEBI(TransactionId xid, Snapshot snapshot)
 
 	return false;
 }
-#endif /* J3VM */
+#endif /* DIVA */

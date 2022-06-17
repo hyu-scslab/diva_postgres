@@ -70,7 +70,7 @@ typedef struct HeapScanDescData
 	int			rs_ntuples;		/* number of visible tuples on page */
 	OffsetNumber rs_vistuples[MaxHeapTuplesPerPage];	/* their offsets */
 
-#ifdef J3VM
+#ifdef DIVA
 	/*
 	 * Original postgres does not in-place update for making a new version   
 	 * tuple when executing update query. Because of this, a transaction     
@@ -116,7 +116,7 @@ typedef enum
 } HTSV_Result;
 
 
-#ifdef J3VM 
+#ifdef DIVA 
 /* Tricky variable for passing the cmd type from ExecutePlan to heap code */
 extern CmdType curr_cmdtype;
 #endif
@@ -153,7 +153,7 @@ extern bool heap_getnextslot(TableScanDesc sscan,
 extern bool heap_fetch(Relation relation, Snapshot snapshot,
 					   HeapTuple tuple, Buffer *userbuf);
 
-#ifdef J3VM
+#ifdef DIVA
 extern bool heap_hot_search_buffer_with_vc(ItemPointer tid, Relation relation,
 									Buffer buffer, Snapshot snapshot,
 									HeapTuple heapTuple,
@@ -178,7 +178,7 @@ extern void heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 extern void heap_multi_insert(Relation relation, struct TupleTableSlot **slots,
 							  int ntuples, CommandId cid, int options,
 							  BulkInsertState bistate);
-#ifdef J3VM
+#ifdef DIVA
 extern TM_Result heap_delete_with_vc(Relation relation, ItemPointer tid,
 							CommandId cid, Snapshot snapshot, Snapshot crosscheck, bool wait, 
 							struct TM_FailureData *tmfd, bool changingPart);
@@ -190,7 +190,7 @@ extern TM_Result heap_delete(Relation relation, ItemPointer tid,
 extern void heap_finish_speculative(Relation relation, ItemPointer tid);
 extern void heap_abort_speculative(Relation relation, ItemPointer tid);
 
-#ifdef J3VM
+#ifdef DIVA
 extern TM_Result heap_update_with_vc(Relation relation, ItemPointer otid,
 							HeapTuple newtup, CommandId cid,
 							Snapshot snapshot, Snapshot crosscheck,

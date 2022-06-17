@@ -3691,7 +3691,7 @@ pgstat_get_wait_activity(WaitEventActivity w)
 		case WAIT_EVENT_WAL_WRITER_MAIN:
 			event_name = "WalWriterMain";
 			break;
-#ifdef J3VM
+#ifdef DIVA
 		case WAIT_EVENT_EBI_TREE_MAIN:
 			event_name = "EbiTreeMain";
 			break;

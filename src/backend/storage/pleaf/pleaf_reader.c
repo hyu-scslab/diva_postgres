@@ -25,7 +25,7 @@
  *
  *-------------------------------------------------------------------------
  */
-#ifdef J3VM
+#ifdef DIVA
 #include "postgres.h"
 
 #include "storage/lwlock.h"

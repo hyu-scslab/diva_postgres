@@ -14,7 +14,7 @@
  *
  *-------------------------------------------------------------------------
  */
-#ifdef J3VM
+#ifdef DIVA
 #include "postgres.h"
 
 #include <signal.h>
@@ -226,7 +226,7 @@ EbiTreeProcessMain(void)
 		/* Clear any already-pending wakeups */
 		ResetLatch(MyLatch);
 
-#ifdef J3VM_PRINT
+#ifdef DIVA_PRINT
 		HandleMainLoopInterrupts();
 #else
 		HandleEbiTreeProcessInterrupts();

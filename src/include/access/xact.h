@@ -22,7 +22,7 @@
 #include "storage/sinval.h"
 #include "utils/datetime.h"
 
-#ifdef J3VM
+#ifdef DIVA
 #include "utils/snapshot.h"
 #endif
 /*
@@ -432,7 +432,7 @@ extern void UnregisterXactCallback(XactCallback callback, void *arg);
 extern void RegisterSubXactCallback(SubXactCallback callback, void *arg);
 extern void UnregisterSubXactCallback(SubXactCallback callback, void *arg);
 
-#ifdef J3VM
+#ifdef DIVA
 extern void BindTransaction(Snapshot snapshot);
 extern void UnbindTransaction(void);
 #endif

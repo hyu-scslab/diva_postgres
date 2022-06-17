@@ -45,7 +45,7 @@
 #include "storage/sinvaladt.h"
 #include "storage/spin.h"
 
-#ifdef J3VM
+#ifdef DIVA
 #include "storage/pleaf.h"
 #include "postmaster/ebi_tree_process.h"
 #endif
@@ -154,7 +154,7 @@ CreateSharedMemoryAndSemaphores(void)
 		size = add_size(size, BTreeShmemSize());
 		size = add_size(size, SyncScanShmemSize());
 		size = add_size(size, AsyncShmemSize());
-#ifdef J3VM /* add_size our system in here */
+#ifdef DIVA /* add_size our system in here */
 		size = add_size(size, EbiTreeShmemSize());
 		size = add_size(size, PLeafShmemSize());
 #endif
@@ -275,7 +275,7 @@ CreateSharedMemoryAndSemaphores(void)
 	SyncScanShmemInit();
 	AsyncShmemInit();
 
-#ifdef J3VM /* Initialize our system in here */
+#ifdef DIVA /* Initialize our system in here */
 	EbiTreeShmemInit();
   PLeafInit();
 #endif

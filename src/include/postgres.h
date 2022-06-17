@@ -47,7 +47,7 @@
 #include "utils/elog.h"
 #include "utils/palloc.h"
 
-#ifdef J3VM_PRINT
+#ifdef DIVA_PRINT
 extern PGDLLIMPORT double pleaf_time;
 extern PGDLLIMPORT double ebi_time;
 #endif

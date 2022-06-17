@@ -25,7 +25,7 @@
  *
  *-------------------------------------------------------------------------
  */
-#ifdef J3VM
+#ifdef DIVA
 #include "postgres.h"
 
 #include "utils/snapmgr.h"
@@ -41,7 +41,7 @@
 
 #include <assert.h>
 
-#ifdef J3VM_PRINT
+#ifdef DIVA_PRINT
 #include "optimizer/cost.h"
 #endif
 /*
@@ -65,7 +65,7 @@ PLeafLookupTuple(
 	PLeafVersionOffset version_offset;
 	bool version_found;
 	int ebi_page_frame_id;
-#ifdef J3VM_PRINT
+#ifdef DIVA_PRINT
 	struct timespec starttime, endtime;
 	if (j3vm_print)
 		clock_gettime(CLOCK_MONOTONIC, &starttime);
@@ -113,7 +113,7 @@ PLeafLookupTuple(
 			break;
 		}
 	}
-#ifdef J3VM_PRINT
+#ifdef DIVA_PRINT
 	if (j3vm_print)
 	{
 		clock_gettime(CLOCK_MONOTONIC, &endtime);
@@ -124,7 +124,7 @@ PLeafLookupTuple(
 
 	/* Fail to find the visible version locator */
 	if (version_offset == PLEAF_INVALID_VERSION_OFFSET) {
-#ifdef J3VM_PRINT
+#ifdef DIVA_PRINT
 		Assert(false);
 #endif
 		return -1;

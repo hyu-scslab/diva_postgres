@@ -252,7 +252,7 @@ typedef struct HeapTupleTableSlot
 	uint32		off;			/* saved state for slot_deform_heap_tuple */
 	HeapTupleData tupdata;		/* optional workspace for storing tuple */
 
-#ifdef J3VM 
+#ifdef DIVA 
 	/*
 	 * Original postgres does not in-place update for making a new version
 	 * tuple when executing update query. Because of this, a transaction

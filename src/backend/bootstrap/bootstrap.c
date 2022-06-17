@@ -50,7 +50,7 @@
 #include "utils/rel.h"
 #include "utils/relmapper.h"
 
-#ifdef J3VM
+#ifdef DIVA
 #include "storage/pleaf_mgr.h"
 #include "postmaster/ebi_tree_process.h"
 #endif
@@ -332,7 +332,7 @@ AuxiliaryProcessMain(int argc, char *argv[])
 		case WalWriterProcess:
 			MyBackendType = B_WAL_WRITER;
 			break;
-#ifdef J3VM
+#ifdef DIVA
 		case EbiTreeProcess:
 			MyBackendType = B_EBI_TREE;
 			break;
@@ -472,7 +472,7 @@ AuxiliaryProcessMain(int argc, char *argv[])
 			WalWriterMain();
 			proc_exit(1);		/* should never return */
 
-#ifdef J3VM
+#ifdef DIVA
 		case EbiTreeProcess:
 			/* don't set signals, ebitree has its own agenda */
 			EbiTreeProcessMain();

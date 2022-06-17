@@ -33,7 +33,7 @@
 #define FrozenTransactionId			((TransactionId) 2)
 #define FirstNormalTransactionId	((TransactionId) 3)
 #define MaxTransactionId			((TransactionId) 0xFFFFFFFF)
-#ifdef J3VM
+#ifdef DIVA
 #define MyMaxTransactionId		((TransactionId) 0xFFFFFFF)
 #endif
 

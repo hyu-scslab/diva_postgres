@@ -56,7 +56,7 @@
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
 
-#ifdef J3VM
+#ifdef DIVA
 #include "postmaster/ebi_tree_process.h"
 #endif
 
@@ -190,7 +190,7 @@ InitProcGlobal(void)
 	ProcGlobal->startupProcPid = 0;
 	ProcGlobal->startupBufferPinWaitBufId = -1;
 	ProcGlobal->walwriterLatch = NULL;
-#ifdef J3VM
+#ifdef DIVA
 	ProcGlobal->ebitreeLatch = NULL;
 	ProcGlobal->pleafmanagerLatch = NULL;
 #endif
@@ -476,7 +476,7 @@ InitProcess(void)
 	InitLWLockAccess();
 	InitDeadLockChecking();
 
-#ifdef J3VM
+#ifdef DIVA
 	if (IsUnderPostmaster)
 		EbiTreeDsaInit();
 #endif

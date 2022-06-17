@@ -362,7 +362,7 @@ systable_beginscan(Relation heapRelation,
 	SysScanDesc sysscan;
 	Relation	irel;
 
-#ifdef J3VM
+#ifdef DIVA
 	heapRelation->is_systable = true;
 #endif
 
@@ -578,7 +578,7 @@ systable_beginscan_ordered(Relation heapRelation,
 	SysScanDesc sysscan;
 	int			i;
 
-#ifdef J3VM
+#ifdef DIVA
 	heapRelation->is_systable = true;
 #endif
 

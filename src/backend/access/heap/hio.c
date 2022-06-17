@@ -25,7 +25,7 @@
 #include "storage/smgr.h"
 
 
-#ifdef J3VM
+#ifdef DIVA
 /*
  * RelationPutHeapTupleWithDummy
  *
@@ -360,7 +360,7 @@ RelationAddExtraBlocks(Relation relation, BulkInsertState bistate)
 	FreeSpaceMapVacuumRange(relation, firstBlock, blockNum + 1);
 }
 
-#ifdef J3VM
+#ifdef DIVA
 /*
  * RelationGetBufferForTuple
  *

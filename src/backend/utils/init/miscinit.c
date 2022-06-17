@@ -82,7 +82,7 @@ bool		IgnoreSystemIndexes = false;
  * ----------------------------------------------------------------
  */
 
-#ifdef J3VM
+#ifdef DIVA
 static void j3vm_segfault_handler(int sig);
 
 static void
@@ -91,7 +91,7 @@ j3vm_segfault_handler(int sig)
 	ereport(LOG, (errmsg("@@@@@ segfault")));
 	sleep(3600);
 }
-#endif /* J3VM */
+#endif /* DIVA */
 
 /*
  * Initialize the basic environment for a postmaster child
@@ -103,9 +103,9 @@ InitPostmasterChild(void)
 {
 	IsUnderPostmaster = true;	/* we are a postmaster subprocess now */
 
-#ifdef J3VM
+#ifdef DIVA
 	signal(SIGSEGV, j3vm_segfault_handler);
-#endif /* J3VM */
+#endif /* DIVA */
 
 	/*
 	 * Set reference point for stack-depth checking. We re-do that even in the
@@ -253,7 +253,7 @@ GetBackendTypeDesc(BackendType backendType)
 		case B_WAL_WRITER:
 			backendDesc = "walwriter";
 			break;
-#ifdef J3VM
+#ifdef DIVA
 		case B_EBI_TREE:
 			backendDesc = "EBI tree worker";
 			break;

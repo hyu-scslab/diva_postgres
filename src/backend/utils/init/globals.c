@@ -130,7 +130,7 @@ int			max_parallel_maintenance_workers = 2;
  * register background workers.
  */
 int			NBuffers = 1000;
-#ifdef J3VM /* Global variables */
+#ifdef DIVA /* Global variables */
 
 #ifdef PLEAF_NUM_PAGE
 int		NPLeafBuffers = PLEAF_NUM_PAGE;
@@ -160,7 +160,7 @@ int		NEbiTreeBuffers = EBI_NUM_PAGE;
 int		NEbiTreeBuffers = 10 * 10;
 #endif  /* EBI_NUM_PAGE */
 
-#endif /* J3VM */
+#endif /* DIVA */
 int			MaxConnections = 90;
 int			max_worker_processes = 8;
 int			max_parallel_workers = 8;

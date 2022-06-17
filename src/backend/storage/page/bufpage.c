@@ -174,7 +174,7 @@ PageIsVerifiedExtended(Page page, BlockNumber blkno, int flags)
 	return false;
 }
 
-#ifdef J3VM 
+#ifdef DIVA 
 /*
  *  PageAddItemExtendedWithDummy
  *
@@ -997,7 +997,7 @@ PageGetExactFreeSpace(Page page)
 
 	return (Size) space;
 }
-#ifdef J3VM 
+#ifdef DIVA 
 /*
  * PageGetHeapFreeSpace
  *

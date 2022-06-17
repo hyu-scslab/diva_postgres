@@ -101,7 +101,7 @@ int			max_stack_depth = 100;
 /* wait N seconds to allow attach from a debugger */
 int			PostAuthDelay = 0;
 
-#ifdef J3VM_PRINT
+#ifdef DIVA_PRINT
 extern PGDLLIMPORT bool j3vm_print;
 
 double total_time = 0;
@@ -997,14 +997,14 @@ exec_simple_query(const char *query_string)
 	bool		use_implicit_block;
 	char		msec_str[32];
 
-#ifdef J3VM
+#ifdef DIVA
 	if (strcmp(query_string, "ALTER TABLE CUSTOMER ADD CONSTRAINT CUSTOMER_I1 PRIMARY KEY (C_W_ID, C_D_ID, C_ID)") == 0)
 	{
 		sleep(5);
 	}
 #endif
 
-#ifdef J3VM_PRINT
+#ifdef DIVA_PRINT
 	struct timespec starttime, endtime;
 	if (j3vm_print)
 		clock_gettime(CLOCK_MONOTONIC, &starttime);
@@ -1357,7 +1357,7 @@ exec_simple_query(const char *query_string)
 
 	debug_query_string = NULL;
 
-#ifdef J3VM_PRINT
+#ifdef DIVA_PRINT
 	if (j3vm_print)
 	{
 		double total_elapsed;
@@ -1369,7 +1369,7 @@ exec_simple_query(const char *query_string)
 		if (total_elapsed > 0)
 		{
 			total_time += total_elapsed;
-			ereport(LOG, (errmsg("[J3VM_PRINT] TOTAL %lf PLEAF %lf EBI %lf", 
+			ereport(LOG, (errmsg("[DIVA_PRINT] TOTAL %lf PLEAF %lf EBI %lf", 
 							total_time, pleaf_time, ebi_time)));
 		}
 	}

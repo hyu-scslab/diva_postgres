@@ -419,7 +419,7 @@ do { \
 #define PIV_LOG_WARNING			(1 << 0)
 #define PIV_REPORT_STAT			(1 << 1)
 
-#ifdef J3VM 
+#ifdef DIVA 
 /**
  * -----------------------------------------------------------------------------
  *   8-byte   |    8-byte   |   4-byte  | 8-byte |  8-byte    |      8-byte    |
@@ -457,7 +457,7 @@ extern void PageInit(Page page, Size pageSize, Size specialSize);
 extern bool PageIsVerified(Page page, BlockNumber blkno);
 extern bool PageIsVerifiedExtended(Page page, BlockNumber blkno, int flags);
 
-#ifdef J3VM 
+#ifdef DIVA 
 extern OffsetNumber PageAddItemExtendedWithDummy(Page page, Item item,
 												Size size,
 												OffsetNumber offsetNumber,
@@ -478,7 +478,7 @@ extern void PageRepairFragmentation(Page page);
 extern Size PageGetFreeSpace(Page page);
 extern Size PageGetFreeSpaceForMultipleTuples(Page page, int ntups);
 extern Size PageGetExactFreeSpace(Page page);
-#ifdef J3VM
+#ifdef DIVA
 extern Size PageGetHeapFreeSpaceWithLP(Page page, int num_lp);
 #endif
 extern Size PageGetHeapFreeSpace(Page page);

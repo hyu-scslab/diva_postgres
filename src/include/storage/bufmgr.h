@@ -225,7 +225,7 @@ extern void MarkBufferDirtyHint(Buffer buffer, bool buffer_std);
 
 extern void UnlockBuffers(void);
 extern void LockBuffer(Buffer buffer, int mode);
-#ifdef J3VM
+#ifdef DIVA
 extern void* GetBufferLock(Buffer buffer);
 #endif
 extern bool ConditionalLockBuffer(Buffer buffer);

@@ -26,7 +26,7 @@
  *
  *-------------------------------------------------------------------------
  */
-#ifdef J3VM
+#ifdef DIVA
 #include "postgres.h"
 
 #include "storage/lwlock.h"
@@ -169,4 +169,4 @@ EbiTreeHashDelete(const EbiTreeBufTag *tagPtr, uint32 hashcode)
 	if (!result) elog(ERROR, "shared ebi_tree hash table corrupted");
 }
 
-#endif /* J3VM */
+#endif /* DIVA */

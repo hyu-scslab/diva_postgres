@@ -1745,7 +1745,7 @@ GetSerializableTransactionSnapshotInt(Snapshot snapshot,
 
 	/* Get the snapshot, or check that it's safe to use */
 	if (!sourcevxid)
-#ifdef J3VM
+#ifdef DIVA
 		snapshot = GetSnapshotData(snapshot, true);
 #else
 		snapshot = GetSnapshotData(snapshot);

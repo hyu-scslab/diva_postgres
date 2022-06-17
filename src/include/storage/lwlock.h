@@ -111,7 +111,7 @@ extern PGDLLIMPORT int NamedLWLockTrancheRequests;
 /* Number of partitions of the shared buffer mapping hashtable */
 #define NUM_BUFFER_PARTITIONS  128
 
-#ifdef J3VM
+#ifdef DIVA
 #ifdef PLEAF_NUM_PAGE
 #define NUM_PLEAF_PARTITIONS 128
 #else
@@ -125,7 +125,7 @@ extern PGDLLIMPORT int NamedLWLockTrancheRequests;
 /* Default number of ebi buffer partitions */
 #define NUM_EBI_TREE_PARTITIONS (1024)
 #endif /* EBI_NUM_PAGE */
-#endif /* J3VM */
+#endif /* DIVA */
 
 /* Number of partitions the shared lock tables are divided into */
 #define LOG2_NUM_LOCK_PARTITIONS  4
@@ -138,7 +138,7 @@ extern PGDLLIMPORT int NamedLWLockTrancheRequests;
 /* Offsets for various chunks of preallocated lwlocks. */
 #define BUFFER_MAPPING_LWLOCK_OFFSET	NUM_INDIVIDUAL_LWLOCKS
 
-#ifdef J3VM
+#ifdef DIVA
 #if 0
 #define PLEAF_MAPPING_LWLOCK_OFFSET		\
 	(BUFFER_MAPPING_LWLOCK_OFFSET + NUM_BUFFER_PARTITIONS)
@@ -160,7 +160,7 @@ extern PGDLLIMPORT int NamedLWLockTrancheRequests;
 #else
 #define LOCK_MANAGER_LWLOCK_OFFSET		\
 	(BUFFER_MAPPING_LWLOCK_OFFSET + NUM_BUFFER_PARTITIONS)
-#endif /* J3VM */
+#endif /* DIVA */
 
 #define PREDICATELOCK_MANAGER_LWLOCK_OFFSET \
 	(LOCK_MANAGER_LWLOCK_OFFSET + NUM_LOCK_PARTITIONS)
@@ -243,7 +243,7 @@ typedef enum BuiltinTrancheIds
 	LWTRANCHE_WAL_INSERT,
 	LWTRANCHE_BUFFER_CONTENT,
 	LWTRANCHE_BUFFER_IO,
-#ifdef J3VM
+#ifdef DIVA
 	LWTRANCHE_PLEAF_BUFFER_IO,
 	LWTRANCHE_NAMED_LOCK,
 #endif
@@ -251,7 +251,7 @@ typedef enum BuiltinTrancheIds
 	LWTRANCHE_REPLICATION_SLOT_IO,
 	LWTRANCHE_LOCK_FASTPATH,
 	LWTRANCHE_BUFFER_MAPPING,
-#ifdef J3VM
+#ifdef DIVA
 	LWTRANCHE_PLEAF_MAPPING,
 	LWTRANCHE_EBI_TREE_MAPPING,
 	LWTRANCHE_EBI_TREE,

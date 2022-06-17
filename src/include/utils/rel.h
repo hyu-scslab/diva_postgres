@@ -234,7 +234,7 @@ typedef struct RelationData
 
 	/* use "struct" here to avoid needing to include pgstat.h: */
 	struct PgStat_TableStatus *pgstat_info; /* statistics collection area */
-#ifdef J3VM
+#ifdef DIVA
 	/*                                                                           
 	 * We want to apply oviraptor to only heap tables but not system tables.     
 	 * This variable is set false in the RelationBuildDesc() function, and       

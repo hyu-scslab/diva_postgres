@@ -69,7 +69,7 @@
 #include "utils/snapmgr.h"
 #include "utils/spccache.h"
 
-#ifdef J3VM
+#ifdef DIVA
 #include "storage/pleaf.h"
 #include "storage/ebi_tree_buf.h"
 /* Tricky variable for passing the cmd type from ExecutePlan to heap code */
@@ -367,7 +367,7 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 	ItemId		lpp;
 	bool		all_visible;
 
-#ifdef J3VM
+#ifdef DIVA
 	Relation relation;
 	bool oviraptor;
 
@@ -409,7 +409,7 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 	/*
 	 * Prune and repair fragmentation for the whole page, if possible.
 	 */
-#ifdef J3VM
+#ifdef DIVA
 	/* Removed original pruning */
 #else
 	heap_page_prune_opt(scan->rs_base.rs_rd, buffer);
@@ -453,7 +453,7 @@ heapgetpage(TableScanDesc sscan, BlockNumber page)
 		 lineoff++, lpp++)
 	{
 
-#ifdef J3VM
+#ifdef DIVA
 		relation = scan->rs_base.rs_rd;
 		oviraptor = IsOviraptor(relation);
 
@@ -1324,7 +1324,7 @@ heap_beginscan(Relation relation, Snapshot snapshot,
 	 */
 	scan = (HeapScanDesc) palloc(sizeof(HeapScanDescData));
 
-#ifdef J3VM
+#ifdef DIVA
 	/* Initialize the array for copying scanned tuples */
 	memset(scan->rs_vistuples_copied, 0x00, sizeof(scan->rs_vistuples_copied));
 #endif
@@ -1494,7 +1494,7 @@ heap_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot *s
 {
 	HeapScanDesc scan = (HeapScanDesc) sscan;
 
-#ifdef J3VM
+#ifdef DIVA
 	Relation relation;
 	bool oviraptor;
 #endif
@@ -1519,7 +1519,7 @@ heap_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot *s
 
 	pgstat_count_heap_getnext(scan->rs_base.rs_rd);
 
-#ifdef J3VM
+#ifdef DIVA
 	relation = scan->rs_base.rs_rd;
 	oviraptor = IsOviraptor(relation);
 
@@ -1659,7 +1659,7 @@ heap_fetch(Relation relation,
 
 	return false;
 }
-#ifdef J3VM
+#ifdef DIVA
 /*
  *	heap_hot_search_buffer	- search HOT chain for tuple satisfying snapshot
  *
@@ -2312,7 +2312,7 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	Buffer		vmbuffer = InvalidBuffer;
 	bool		all_visible_cleared = false;
 
-#ifdef J3VM
+#ifdef DIVA
 	bool		oviraptor;
 #endif
 	/*
@@ -2327,7 +2327,7 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	 * Find buffer to insert this tuple into.  If the page is all visible,
 	 * this will also pin the requisite visibility map page.
 	 */
-#ifdef J3VM
+#ifdef DIVA
 	oviraptor = IsOviraptor(relation);
 
 	if (oviraptor)
@@ -2364,7 +2364,7 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	/* NO EREPORT(ERROR) from here till changes are logged */
 	START_CRIT_SECTION();
 
-#ifdef J3VM
+#ifdef DIVA
 	if (oviraptor)
 		RelationPutHeapTupleWithDummy(relation, buffer, heaptup,
 							(options & HEAP_INSERT_SPECULATIVE) != 0);
@@ -2635,7 +2635,7 @@ heap_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 		 * Find buffer where at least the next tuple will fit.  If the page is
 		 * all-visible, this will also pin the requisite visibility map page.
 		 */
-#ifdef J3VM
+#ifdef DIVA
 		buffer = RelationGetBufferForTuples(relation, heaptuples[ndone]->t_len,
 												InvalidBuffer, options, bistate,
 												&vmbuffer, NULL, 2);
@@ -2653,7 +2653,7 @@ heap_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 		 * RelationGetBufferForTuple has ensured that the first tuple fits.
 		 * Put that on the page, and then as many other tuples as fit.
 		 */
-#ifdef J3VM
+#ifdef DIVA
 		RelationPutHeapTupleWithDummy(
 				relation, buffer, heaptuples[ndone], false);
 #else
@@ -2670,7 +2670,7 @@ heap_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 		{
 			HeapTuple	heaptup = heaptuples[ndone + nthispage];
 
-#ifdef J3VM
+#ifdef DIVA
 			if (PageGetHeapFreeSpaceWithLP(page, 3) <
 						MAXALIGN(heaptup->t_len) * 2 + MAXALIGN(PITEM_SZ) + saveFreeSpace)
 				break;
@@ -2912,7 +2912,7 @@ xmax_infomask_changed(uint16 new_infomask, uint16 old_infomask)
 	return false;
 }
 
-#ifdef J3VM
+#ifdef DIVA
 /*
  *	heap_delete - delete a tuple
  *
@@ -3807,7 +3807,7 @@ simple_heap_delete(Relation relation, ItemPointer tid)
 			break;
 	}
 }
-#ifdef J3VM
+#ifdef DIVA
 /*
  *	heap_update - replace a tuple
  *

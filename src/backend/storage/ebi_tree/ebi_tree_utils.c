@@ -26,7 +26,7 @@
  *
  *-------------------------------------------------------------------------
  */
-#ifdef J3VM
+#ifdef DIVA
 #include "postgres.h"
 
 #include "storage/ebi_tree.h"
@@ -322,4 +322,4 @@ EbiSpscQueueFrontDsaPointer(EbiSpscQueue queue)
 	return queue->front->dsa_ptr;
 }
 
-#endif /* J3VM */
+#endif /* DIVA */

@@ -612,7 +612,7 @@ index_fetch_heap(IndexScanDesc scan, TupleTableSlot *slot)
 bool
 index_getnext_slot(IndexScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 {
-#ifdef J3VM
+#ifdef DIVA
 	bool		oviraptor;
 #endif
 	for (;;)
@@ -637,7 +637,7 @@ index_getnext_slot(IndexScanDesc scan, ScanDirection direction, TupleTableSlot *
 		 * the index.
 		 */
 		Assert(ItemPointerIsValid(&scan->xs_heaptid));
-#ifdef J3VM
+#ifdef DIVA
 		/*
 		 * We only want to change the fetch routine for a relation
 		 * having oviraptor tuples

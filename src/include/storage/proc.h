@@ -22,7 +22,7 @@
 #include "storage/pg_sema.h"
 #include "storage/proclist_types.h"
 
-#ifdef J3VM
+#ifdef DIVA
 #include "utils/dsa.h"
 #endif
 
@@ -265,7 +265,7 @@ typedef struct PROC_HDR
 	pg_atomic_uint32 clogGroupFirst;
 	/* WALWriter process's latch */
 	Latch	   *walwriterLatch;
-#ifdef J3VM
+#ifdef DIVA
 	/* EBI tree process's latch */
 	Latch		 *ebitreeLatch;
 	/* PLeaf Manager process's latch */
@@ -297,7 +297,7 @@ extern PGPROC *PreparedXactProcs;
  * Startup process and WAL receiver also consume 2 slots, but WAL writer is
  * launched only after startup has exited, so we only need 4 slots.
  */
-#ifdef J3VM
+#ifdef DIVA
 #define NUM_AUXILIARY_PROCS		6
 #else
 #define NUM_AUXILIARY_PROCS		4

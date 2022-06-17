@@ -44,7 +44,7 @@
 #include "utils/builtins.h"
 #include "utils/rel.h"
 
-#ifdef J3VM
+#ifdef DIVA
 #include "storage/pleaf.h"
 #include "storage/ebi_tree_buf.h"
 #endif
@@ -122,7 +122,7 @@ heapam_index_fetch_tuple(struct IndexFetchTableData *scan,
 	BufferHeapTupleTableSlot *bslot = (BufferHeapTupleTableSlot *) slot;
 	bool		got_heap_tuple;
 
-#ifdef J3VM
+#ifdef DIVA
 	bool		oviraptor;
 #endif
 
@@ -132,7 +132,7 @@ heapam_index_fetch_tuple(struct IndexFetchTableData *scan,
 	if (!*call_again)
 	{
 		/* Switch to correct buffer if we don't have it already */
-#ifdef J3VM
+#ifdef DIVA
 		Buffer		prev_buf = hscan->xs_cbuf;
 #else
 		Buffer		prev_buf = hscan->xs_cbuf;
@@ -145,7 +145,7 @@ heapam_index_fetch_tuple(struct IndexFetchTableData *scan,
 		/*
 		 * Prune page, but only if we weren't already on this page
 		 */
-#ifdef J3VM
+#ifdef DIVA
 		if (prev_buf != hscan->xs_cbuf)
 			heap_page_prune_opt(hscan->xs_base.rel, hscan->xs_cbuf);
 #else
@@ -157,7 +157,7 @@ heapam_index_fetch_tuple(struct IndexFetchTableData *scan,
 
 	/* Obtain share-lock on the buffer so we can examine visibility */
 	LockBuffer(hscan->xs_cbuf, BUFFER_LOCK_SHARE);
-#ifdef J3VM
+#ifdef DIVA
 	oviraptor = IsOviraptor(hscan->xs_base.rel);
 
 
@@ -206,7 +206,7 @@ heapam_index_fetch_tuple(struct IndexFetchTableData *scan,
 
 		slot->tts_tableOid = RelationGetRelid(scan->rel);
 
-#ifdef J3VM
+#ifdef DIVA
 		if (oviraptor)
 			ExecStoreBufferHeapTuple(
 					bslot->base.copied_tuple, slot, hscan->xs_cbuf);
@@ -358,7 +358,7 @@ heapam_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 					Snapshot snapshot, Snapshot crosscheck, bool wait,
 					TM_FailureData *tmfd, bool changingPart)
 {
-#ifdef J3VM
+#ifdef DIVA
 	bool		oviraptor;
 
 	oviraptor = IsOviraptor(relation);
@@ -394,14 +394,14 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 	HeapTuple	tuple = ExecFetchSlotHeapTuple(slot, true, &shouldFree);
 	TM_Result	result;
 
-#ifdef J3VM
+#ifdef DIVA
 	bool oviraptor;
 #endif
 
 	/* Update the tuple with table oid */
 	slot->tts_tableOid = RelationGetRelid(relation);
 	tuple->t_tableOid = slot->tts_tableOid;
-#ifdef J3VM
+#ifdef DIVA
 
 	oviraptor = IsOviraptor(relation);
 
@@ -427,7 +427,7 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 	 *
 	 * If it's a HOT update, we mustn't insert new index entries.
 	 */
-#ifdef J3VM
+#ifdef DIVA
 	if (oviraptor)
 		*update_indexes = false;
 	else
@@ -2213,7 +2213,7 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 	Snapshot	snapshot;
 	int			ntup;
 
-#ifdef J3VM
+#ifdef DIVA
 	Relation  relation;
 	bool        oviraptor;
 
@@ -2254,7 +2254,7 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 	/*
 	 * Prune and repair fragmentation for the whole page, if possible.
 	 */
-#ifdef J3VM
+#ifdef DIVA
 	heap_page_prune_opt(scan->rs_rd, buffer);
 #else
 	heap_page_prune_opt(scan->rs_rd, buffer);
@@ -2287,7 +2287,7 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 
 			ItemPointerSet(&tid, page, offnum);
 
-#ifdef J3VM
+#ifdef DIVA
 			if (oviraptor)
 			{
 				if (heap_hot_search_buffer_with_vc(
@@ -2326,7 +2326,7 @@ heapam_scan_bitmap_next_block(TableScanDesc scan,
 			HeapTupleData loctup;
 			bool		valid;
 
-#ifdef J3VM
+#ifdef DIVA
 			if (oviraptor)
 			{
 				Item meta_tup;
@@ -2546,7 +2546,7 @@ heapam_scan_bitmap_next_tuple(TableScanDesc scan,
 	Page		dp;
 	ItemId		lp;
 
-#ifdef J3VM
+#ifdef DIVA
 	Relation relation;
 	bool		oviraptor;
 #endif
@@ -2568,7 +2568,7 @@ heapam_scan_bitmap_next_tuple(TableScanDesc scan,
 
 	pgstat_count_heap_fetch(scan->rs_rd);
 
-#ifdef J3VM
+#ifdef DIVA
 	relation = scan->rs_rd;
 	oviraptor = IsOviraptor(relation);
 
